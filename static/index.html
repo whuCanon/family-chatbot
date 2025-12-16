@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Family Chatbot</title>
+    <link rel="icon" type="image/png" href="/assets/favicon.ico">
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="style.css">
+    <!-- KaTeX for math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <!-- Markdown & Code highlighting -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <!-- Mermaid for diagrams -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <!-- HEIC to JPEG converter for iOS images -->
+    <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+</head>
+
+<body>
+    <div id="login-overlay" class="overlay">
+        <div class="login-card">
+            <h2>Welcome Back</h2>
+            <p>Please enter the access code to continue.</p>
+            <input type="password" id="password-input" placeholder="Access Code" />
+            <button id="login-btn">Enter</button>
+            <p id="login-error" class="error-msg"></p>
+        </div>
+    </div>
+
+    <div id="app-container" class="hidden">
+        <aside id="history-sidebar" class="sidebar hidden-mobile">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <img src="/assets/logo.png" alt="Logo" class="logo-img">
+                </div>
+                <div class="sidebar-header-actions">
+                    <button id="search-history-btn" class="icon-btn" title="Search History">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                    </button>
+                    <button id="close-sidebar-btn" class="icon-btn mobile-only">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Search Panel (hidden by default) -->
+            <div id="search-panel" class="search-panel hidden">
+                <div class="search-input-wrapper">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                        class="search-icon">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <input type="text" id="search-input" placeholder="Search history..." autocomplete="off">
+                    <button id="clear-search-btn" class="clear-search-btn hidden">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                <div id="search-results" class="search-results"></div>
+            </div>
+
+            <div class="sidebar-actions">
+                <button id="sidebar-new-chat-btn" class="new-chat-primary-btn">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    New Chat
+                </button>
+            </div>
+
+            <div class="history-section">
+                <h3 class="history-title" style="font-size: 16px;">历史消息</h3>
+                <div id="history-list">
+                </div>
+            </div>
+        </aside>
+
+        <!-- 移动端侧边栏遮罩层 -->
+        <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+        <div class="main-content">
+            <header>
+                <div class="header-left">
+                    <button id="toggle-sidebar-btn" class="icon-btn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="3" y1="12" x2="21" y2="12"></line>
+                            <line x1="3" y1="6" x2="21" y2="6"></line>
+                            <line x1="3" y1="18" x2="21" y2="18"></line>
+                        </svg>
+                    </button>
+                    <h1>Elegant Chat</h1>
+                </div>
+            </header>
+
+            <main id="chat-container">
+                <div class="welcome-message">
+                    <h3>Hello!</h3>
+                    <p>I'm your AI assistant. Ask me anything or upload images.</p>
+                </div>
+            </main>
+
+            <footer>
+                <div class="input-area">
+                    <div id="image-preview-container" class="image-preview-container hidden"></div>
+
+                    <div class="input-wrapper">
+                        <input type="file" id="image-upload-input" multiple accept="image/*" class="hidden">
+
+                        <button id="upload-trigger-btn" class="icon-btn" title="Upload Images">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <path
+                                    d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48">
+                                </path>
+                            </svg>
+                        </button>
+
+                        <textarea id="user-input" placeholder="Type a message..." rows="1"></textarea>
+
+                        <button id="send-btn">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <line x1="22" y1="2" x2="11" y2="13"></line>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="menu-bar">
+                        <div class="menu-left">
+                            <select id="model-select">
+                                <option value="gpt-5.1">GPT-5.1</option>
+                                <option value="gemini-3-pro-preview">Gemini 3 Pro</option>
+                                <option value="gemini-3-pro-image-preview">Nano Banana Pro</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <!-- Lightbox Markup -->
+    <div id="lightbox" class="lightbox-overlay">
+        <div class="lightbox-close" onclick="closeLightbox()">&times;</div>
+        <div class="lightbox-prev lightbox-nav" onclick="changeLightboxImage(-1)">&#10094;</div>
+        <div class="lightbox-next lightbox-nav" onclick="changeLightboxImage(1)">&#10095;</div>
+        <div class="lightbox-content">
+            <img id="lightbox-img" class="lightbox-image" src="" alt="Full view">
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
