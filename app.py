@@ -19,6 +19,7 @@ load_dotenv()
 app = Flask(__name__, static_folder='static')
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "complex_fixed_secret_key_for_persistence")
 app.config['PERMANENT_SESSION_LIFETIME'] = 3600 * 24 * 30 
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 最大上传 50MB
 
 # --- Configuration ---
 SITE_PASSWORD = os.getenv("SITE_PASSWORD", "lwtlwt123")
