@@ -867,15 +867,27 @@ function removeImage(index) {
 }
 
 async function uploadFile(file) {
+    // 先尝试在前端转换格式（如 HEIC -> JPEG）
+    let processedFile;
+    try {
+        processedFile = await processImageFile(file);
+    } catch (e) {
+        console.warn('Frontend image conversion failed, will send original file:', e);
+        processedFile = file; // 转换失败则使用原文件，交给后端处理
+    }
+
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', processedFile);
 
     const res = await fetch('/api/upload', {
         method: 'POST',
         body: formData
     });
 
-    if (!res.ok) throw new Error('Upload failed');
+    if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Upload failed');
+    }
     const data = await res.json();
     return data.url; // 返回如 /images/cache/uuid.jpg
 }

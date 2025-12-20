@@ -102,6 +102,7 @@ def process_and_save_image(file):
     cleanup_old_images() # 每次上传前检查是否需要清理
 
     original_ext = os.path.splitext(file.filename)[1].lower()
+    print(f"[Upload] Received file: {file.filename}, extension: {original_ext}")
     
     # 检查是否是 HEIC/HEIF 格式（iPhone 默认图片格式）
     is_heic = original_ext in ['.heic', '.heif']
@@ -110,11 +111,13 @@ def process_and_save_image(file):
     if is_heic:
         # HEIC/HEIF 转换为 JPEG
         ext = '.jpg'
-        print(f"Detected HEIC/HEIF format, will convert to JPEG: {file.filename}")
+        print(f"[Upload] Detected HEIC/HEIF format, will convert to JPEG")
     elif original_ext in ['.jpg', '.jpeg', '.png', '.webp', '.gif']:
         ext = original_ext
     else:
+        # 未知格式也尝试转换为 JPEG
         ext = '.jpg'
+        print(f"[Upload] Unknown format '{original_ext}', will attempt to convert to JPEG")
     
     filename = f"{uuid.uuid4()}{ext}"
     filepath = os.path.join(IMAGE_CACHE_DIR, filename)
@@ -122,46 +125,60 @@ def process_and_save_image(file):
     # 先保存原始文件到临时路径以便处理
     temp_filepath = os.path.join(IMAGE_CACHE_DIR, f"temp_{uuid.uuid4()}{original_ext}")
     file.save(temp_filepath)
+    print(f"[Upload] Saved temp file: {temp_filepath}, size: {os.path.getsize(temp_filepath)} bytes")
 
     try:
         with Image.open(temp_filepath) as img:
+            print(f"[Upload] Opened image successfully, mode: {img.mode}, size: {img.size}")
+            
             # 检查条件
             file_size = os.path.getsize(temp_filepath)
             width, height = img.size
             num_pixels = width * height
 
-            # 对于 HEIC/HEIF 或大图片进行处理
+            # 对于 HEIC/HEIF、未知格式或大图片进行处理
             needs_resize = file_size > 5 * 1024 * 1024 or num_pixels > 1e7
+            needs_conversion = is_heic or (original_ext not in ['.jpg', '.jpeg', '.png', '.webp', '.gif'])
             
-            if is_heic or needs_resize:
+            if needs_conversion or needs_resize:
                 # 如果需要 resize
                 if needs_resize:
                     img.thumbnail((1920, 1920))
-                    print(f"Resized large image: {file.filename}")
+                    print(f"[Upload] Resized large image to: {img.size}")
                 
                 # 转换颜色模式（HEIC 可能有 RGBA 或其他模式）
-                if img.mode in ("RGBA", "P", "LA", "L"):
+                if img.mode not in ("RGB",):
+                    print(f"[Upload] Converting color mode from {img.mode} to RGB")
                     img = img.convert("RGB")
                 
                 # 保存为 JPEG
                 img.save(filepath, "JPEG", quality=85)
-                print(f"Saved converted image: {filepath}")
+                print(f"[Upload] Saved converted image: {filepath}")
             else:
                 # 不需要转换，直接移动文件
                 shutil.move(temp_filepath, filepath)
                 temp_filepath = None  # 标记已经移动，不需要删除
+                print(f"[Upload] Moved file directly: {filepath}")
                 
     except Exception as e:
-        print(f"Image processing error: {e}")
-        # 如果处理失败，尝试使用原文件
-        if os.path.exists(temp_filepath):
-            shutil.move(temp_filepath, filepath)
-            temp_filepath = None
+        print(f"[Upload] Image processing error: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        # 如果处理失败，抛出异常让调用方知道
+        if temp_filepath and os.path.exists(temp_filepath):
+            try:
+                os.remove(temp_filepath)
+            except:
+                pass
+        raise Exception(f"Failed to process image: {str(e)}")
+        
     finally:
         # 清理临时文件
         if temp_filepath and os.path.exists(temp_filepath):
             try:
                 os.remove(temp_filepath)
+                print(f"[Upload] Cleaned up temp file: {temp_filepath}")
             except:
                 pass
 
