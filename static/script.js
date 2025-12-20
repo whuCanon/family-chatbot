@@ -867,17 +867,9 @@ function removeImage(index) {
 }
 
 async function uploadFile(file) {
-    // 先尝试在前端转换格式（如 HEIC -> JPEG）
-    let processedFile;
-    try {
-        processedFile = await processImageFile(file);
-    } catch (e) {
-        console.warn('Frontend image conversion failed, will send original file:', e);
-        processedFile = file; // 转换失败则使用原文件，交给后端处理
-    }
-
+    // 直接上传原始文件，后端会处理 HEIC/HEIF 等格式转换
     const formData = new FormData();
-    formData.append('file', processedFile);
+    formData.append('file', file);
 
     const res = await fetch('/api/upload', {
         method: 'POST',
@@ -894,141 +886,11 @@ async function uploadFile(file) {
 
 // Chat Logic
 
-// 支持的标准图片格式
-const SUPPORTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-
-// 检查是否是 HEIC/HEIF 格式
-function isHeicFormat(file) {
-    const fileName = file.name.toLowerCase();
-    const fileType = file.type.toLowerCase();
-    return fileType === 'image/heic' ||
-        fileType === 'image/heif' ||
-        fileName.endsWith('.heic') ||
-        fileName.endsWith('.heif');
-}
-
-// 检查图片是否需要转换格式
-function needsConversion(file) {
-    // 如果是标准格式，不需要转换
-    if (SUPPORTED_IMAGE_TYPES.includes(file.type)) {
-        return false;
-    }
-    // HEIC/HEIF（iOS 常见格式）、BMP、TIFF 等需要转换
-    return true;
-}
-
-// 使用 heic2any 库转换 HEIC/HEIF 格式
-async function convertHeicToJpeg(file) {
-    if (typeof heic2any === 'undefined') {
-        throw new Error('heic2any library not loaded');
-    }
-
-    const blob = await heic2any({
-        blob: file,
-        toType: 'image/jpeg',
-        quality: 0.92
-    });
-
-    // heic2any 可能返回数组（多帧 HEIC）或单个 blob
-    const resultBlob = Array.isArray(blob) ? blob[0] : blob;
-
-    const newFileName = file.name.replace(/\.[^/.]+$/, '.jpg');
-    return new File([resultBlob], newFileName, {
-        type: 'image/jpeg',
-        lastModified: Date.now()
-    });
-}
-
-// 使用 Canvas 将其他非标准格式图片转换为 JPEG
-async function convertImageToJpegViaCanvas(file) {
-    return new Promise((resolve, reject) => {
-        // 创建 URL 对象
-        const url = URL.createObjectURL(file);
-        const img = new Image();
-
-        img.onload = () => {
-            try {
-                // 创建 canvas
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-
-                // 设置 canvas 尺寸
-                canvas.width = img.naturalWidth;
-                canvas.height = img.naturalHeight;
-
-                // 绘制图片到 canvas
-                ctx.drawImage(img, 0, 0);
-
-                // 转换为 JPEG blob
-                canvas.toBlob((blob) => {
-                    if (blob) {
-                        // 创建新的 File 对象
-                        const newFileName = file.name.replace(/\.[^/.]+$/, '.jpg');
-                        const convertedFile = new File([blob], newFileName, {
-                            type: 'image/jpeg',
-                            lastModified: Date.now()
-                        });
-                        resolve(convertedFile);
-                    } else {
-                        reject(new Error('Failed to convert image'));
-                    }
-                }, 'image/jpeg', 0.92); // 0.92 是 JPEG 质量参数
-
-            } catch (err) {
-                reject(err);
-            } finally {
-                URL.revokeObjectURL(url);
-            }
-        };
-
-        img.onerror = () => {
-            URL.revokeObjectURL(url);
-            reject(new Error('Failed to load image for conversion'));
-        };
-
-        img.src = url;
-    });
-}
-
-// 处理图片文件，必要时进行格式转换
-async function processImageFile(file) {
-    if (!needsConversion(file)) {
-        return file;
-    }
-
-    console.log(`Converting ${file.name} (${file.type || 'unknown type'}) to JPEG...`);
-
-    try {
-        let convertedFile;
-
-        // HEIC/HEIF 格式使用专门的库转换
-        if (isHeicFormat(file)) {
-            console.log('Using heic2any for HEIC/HEIF conversion...');
-            convertedFile = await convertHeicToJpeg(file);
-        } else {
-            // 其他格式尝试使用 Canvas 转换
-            console.log('Using Canvas for image conversion...');
-            convertedFile = await convertImageToJpegViaCanvas(file);
-        }
-
-        console.log(`Converted successfully to ${convertedFile.name}`);
-        return convertedFile;
-    } catch (err) {
-        console.warn(`Failed to convert ${file.name}:`, err);
-        // 转换失败时返回原文件，让后端处理或提示错误
-        showToast(`图片格式转换失败: ${file.name}`);
-        return file;
-    }
-}
-
-// 辅助函数：将 File 对象转换为 Base64 字符串（支持格式转换）
+// 辅助函数：将 File 对象转换为 Base64 字符串
 async function fileToBase64(file) {
-    // 先进行格式转换（如果需要）
-    const processedFile = await processImageFile(file);
-
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.readAsDataURL(processedFile); // 结果形如 data:image/jpeg;base64,...
+        reader.readAsDataURL(file); // 结果形如 data:image/jpeg;base64,...
         reader.onload = () => resolve(reader.result);
         reader.onerror = error => reject(error);
     });
@@ -1401,7 +1263,7 @@ async function handleSend() {
             loadingMsgDiv.remove();
 
         } catch (e) {
-            console.error("Upload failed", e);
+            // console.error("Upload failed", e);
             if (loadingMsgDiv) loadingMsgDiv.remove();
             alert("Failed to upload images: " + e.message);
             return;
