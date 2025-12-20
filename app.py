@@ -4,10 +4,15 @@ import json
 import glob
 import uuid
 import base64
+import shutil
 import requests
 from flask import Flask, request, jsonify, send_from_directory, session, Response, stream_with_context
 from dotenv import load_dotenv
 from PIL import Image
+import pillow_heif
+
+# 注册 HEIF 格式支持，使 Pillow 能够打开 HEIC/HEIF 图片
+pillow_heif.register_heif_opener()
 
 load_dotenv()
 
@@ -93,36 +98,72 @@ def cleanup_old_images():
 
 
 def process_and_save_image(file):
-    """保存图片，检查大小并Resize"""
+    """保存图片，检查大小并Resize，自动转换 HEIC/HEIF 格式为 JPEG"""
     cleanup_old_images() # 每次上传前检查是否需要清理
 
-    ext = os.path.splitext(file.filename)[1].lower()
-    if ext not in ['.jpg', '.jpeg', '.png', '.webp', '.gif']:
+    original_ext = os.path.splitext(file.filename)[1].lower()
+    
+    # 检查是否是 HEIC/HEIF 格式（iPhone 默认图片格式）
+    is_heic = original_ext in ['.heic', '.heif']
+    
+    # 确定最终保存的扩展名
+    if is_heic:
+        # HEIC/HEIF 转换为 JPEG
+        ext = '.jpg'
+        print(f"Detected HEIC/HEIF format, will convert to JPEG: {file.filename}")
+    elif original_ext in ['.jpg', '.jpeg', '.png', '.webp', '.gif']:
+        ext = original_ext
+    else:
         ext = '.jpg'
     
     filename = f"{uuid.uuid4()}{ext}"
     filepath = os.path.join(IMAGE_CACHE_DIR, filename)
 
-    # 保存原始文件以便处理
-    file.save(filepath)
+    # 先保存原始文件到临时路径以便处理
+    temp_filepath = os.path.join(IMAGE_CACHE_DIR, f"temp_{uuid.uuid4()}{original_ext}")
+    file.save(temp_filepath)
 
     try:
-        with Image.open(filepath) as img:
+        with Image.open(temp_filepath) as img:
             # 检查条件
-            file_size = os.path.getsize(filepath)
+            file_size = os.path.getsize(temp_filepath)
             width, height = img.size
             num_pixels = width * height
 
-            # 超过5MB (5 * 1024 * 1024) 或 超过1000万像素
-            if file_size > 5 * 1024 * 1024 or num_pixels > 1e7:
-                # Resize logic: 保持比例，长边缩放到1920
-                img.thumbnail((1920, 1920))
-                # 重新保存，如果是JPG稍微压缩质量
-                if img.mode in ("RGBA", "P"): img = img.convert("RGB")
-                img.save(filepath, quality=85)
+            # 对于 HEIC/HEIF 或大图片进行处理
+            needs_resize = file_size > 5 * 1024 * 1024 or num_pixels > 1e7
+            
+            if is_heic or needs_resize:
+                # 如果需要 resize
+                if needs_resize:
+                    img.thumbnail((1920, 1920))
+                    print(f"Resized large image: {file.filename}")
+                
+                # 转换颜色模式（HEIC 可能有 RGBA 或其他模式）
+                if img.mode in ("RGBA", "P", "LA", "L"):
+                    img = img.convert("RGB")
+                
+                # 保存为 JPEG
+                img.save(filepath, "JPEG", quality=85)
+                print(f"Saved converted image: {filepath}")
+            else:
+                # 不需要转换，直接移动文件
+                shutil.move(temp_filepath, filepath)
+                temp_filepath = None  # 标记已经移动，不需要删除
+                
     except Exception as e:
         print(f"Image processing error: {e}")
-        # 如果处理失败，尽量保留原文件或者报错，这里选择保留原文件
+        # 如果处理失败，尝试使用原文件
+        if os.path.exists(temp_filepath):
+            shutil.move(temp_filepath, filepath)
+            temp_filepath = None
+    finally:
+        # 清理临时文件
+        if temp_filepath and os.path.exists(temp_filepath):
+            try:
+                os.remove(temp_filepath)
+            except:
+                pass
 
     return filename
 
