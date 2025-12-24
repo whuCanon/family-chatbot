@@ -578,7 +578,10 @@ def image_proxy():
     
     payload = {
         "contents": gemini_contents,
-        "generationConfig": { "responseModalities": ["IMAGE"] }
+        "generationConfig": {
+            "responseModalities": ["IMAGE"],
+            "imageConfig": { "imageSize": "2K" }
+        }
     }
     headers = { "Content-Type": "application/json" }
     
