@@ -573,14 +573,20 @@ def image_proxy():
     processed_messages = process_messages_for_llm(messages)
     gemini_contents = convert_openai_to_gemini(processed_messages)
     
-    gemini_model = "gemini-3-pro-image-preview"
+    gemini_model = req_data.get('model', 'gemini-3.1-flash-image')
+    if gemini_model not in ["gemini-3.1-flash-image", "gemini-3-pro-image-preview"]:
+        gemini_model = "gemini-3.1-flash-image"
     google_url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:generateContent?key={GEMINI_API_KEY}"
     
+    image_size = req_data.get('size', '2K')
+    if image_size not in ["1K", "2K", "4K"]:
+        image_size = "2K"
+
     payload = {
         "contents": gemini_contents,
         "generationConfig": {
             "responseModalities": ["IMAGE"],
-            "imageConfig": { "imageSize": "2K" }
+            "imageConfig": { "imageSize": image_size }
         }
     }
     headers = { "Content-Type": "application/json" }

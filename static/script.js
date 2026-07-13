@@ -7,6 +7,7 @@ const chatContainer = document.getElementById('chat-container');
 const userInput = document.getElementById('user-input');
 const sendBtn = document.getElementById('send-btn');
 const modelSelect = document.getElementById('model-select');
+const resolutionSelect = document.getElementById('resolution-select');
 const sidebarNewChatBtn = document.getElementById('sidebar-new-chat-btn');
 const toggleSidebarBtn = document.getElementById('toggle-sidebar-btn');
 const closeSidebarBtn = document.getElementById('close-sidebar-btn');
@@ -902,7 +903,21 @@ function appendMessage(role, content, isImage = false, messageIndex = -1) {
 
     const avatar = document.createElement('div');
     avatar.className = 'avatar';
-    avatar.textContent = role === 'user' ? '👤' : '🤖';
+
+    if (role === 'user') {
+        avatar.textContent = '👤';
+    } else {
+        avatar.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" style="display: block; width: 60%; height: 60%;">
+  <defs>
+    <linearGradient id="gemini-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#93c5fd" />
+      <stop offset="50%" stop-color="#a855f7" />
+      <stop offset="100%" stop-color="#ec4899" />
+    </linearGradient>
+  </defs>
+  <path fill="url(#gemini-gradient)" d="M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.93a12.3 12.3 0 0 1 3.81 2.58Q12 21.51 11.04 19.32Z"/>
+</svg>`;
+    }
     div.appendChild(avatar);
 
     const contentDiv = document.createElement('div');
@@ -1179,7 +1194,7 @@ async function updateMessage(messageDiv, editContainer, newText, messageIndex) {
     const model = modelSelect.value;
     updateSendButtonState(true);
 
-    if (model === 'gemini-3-pro-image-preview') {
+    if (model === 'gemini-3.1-flash-image') {
         const recentMessages = messageHistory.slice(-20);
         await generateImage(recentMessages, model);
     } else {
@@ -1298,7 +1313,7 @@ async function handleSend() {
     // 更新按钮为停止状态
     updateSendButtonState(true);
 
-    if (model === 'gemini-3-pro-image-preview') {
+    if (model === 'gemini-3.1-flash-image') {
         const recentMessages = messageHistory.slice(-20);
 
         await generateImage(recentMessages, model);
@@ -1309,7 +1324,7 @@ async function handleSend() {
     // 按钮状态会在 generateText/generateImage 的 finally 中恢复
 }
 
-async function generateImage(messages, model = "gemini-3-pro-image-preview") {
+async function generateImage(messages, model = "gemini-3.1-flash-image") {
     // 创建 AbortController
     currentAbortController = new AbortController();
     isGenerating = true;
@@ -1324,7 +1339,8 @@ async function generateImage(messages, model = "gemini-3-pro-image-preview") {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 model: model,
-                messages: messages // 直接发送整个历史
+                messages: messages, // 直接发送整个历史
+                size: resolutionSelect ? resolutionSelect.value : "2K"
             }),
             signal: currentAbortController.signal
         });
@@ -1511,9 +1527,26 @@ sidebarNewChatBtn.addEventListener('click', () => {
 
 // 模型切换监听：切换到/从生图模型时自动开启新对话
 let previousModel = modelSelect.value;
+const imageModel = 'gemini-3.1-flash-image';
+
+function updateResolutionVisibility(model) {
+    if (resolutionSelect) {
+        if (model === imageModel) {
+            resolutionSelect.style.display = 'inline-block';
+        } else {
+            resolutionSelect.style.display = 'none';
+        }
+    }
+}
+
+// 初始化时控制分辨率下拉框是否显示
+updateResolutionVisibility(previousModel);
+
 modelSelect.addEventListener('change', () => {
     const newModel = modelSelect.value;
-    const imageModel = 'gemini-3-pro-image-preview';
+    
+    // 控制分辨率下拉框是否显示
+    updateResolutionVisibility(newModel);
 
     // 如果切换到生图模型或从生图模型切出，自动开启新对话
     if (newModel === imageModel || previousModel === imageModel) {

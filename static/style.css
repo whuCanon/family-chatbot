@@ -530,8 +530,8 @@ header h1 {
     justify-content: center;
     font-size: 1.25rem;
     flex-shrink: 0;
-    background: linear-gradient(135deg, #27272a 0%, #18181b 100%);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%);
+    border: 1px solid rgba(99, 102, 241, 0.15);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
@@ -1134,7 +1134,7 @@ textarea {
     padding: 0 0.5rem;
 }
 
-select#model-select {
+select#model-select, select#resolution-select {
     background: var(--card-bg);
     border: 1px solid var(--border-color);
     color: var(--text-primary);
@@ -1146,7 +1146,7 @@ select#model-select {
     transition: all 0.2s;
 }
 
-select#model-select:hover {
+select#model-select:hover, select#resolution-select:hover {
     border-color: var(--text-secondary);
 }
 
