@@ -407,8 +407,8 @@ def convert_openai_to_gemini(messages):
             gemini_contents.append({"role": gemini_role, "parts": parts})
     return gemini_contents
 
-def stream_gemini_native(model_name, messages):
-    """使用 Google Gemini 原生 API 进行流式生成"""
+def stream_gemini_native(model_name, messages, web_search=False):
+    """使用 Google Gemini 原生 API 进行流式生成，支持网络搜索 Grounding"""
     target_url = GEMINI_NATIVE_URL.format(model=model_name) + f"?key={GEMINI_API_KEY}"
     headers = {"Content-Type": "application/json"}
     contents = convert_openai_to_gemini(messages)
@@ -422,6 +422,9 @@ def stream_gemini_native(model_name, messages):
         }
     }
 
+    if web_search:
+        payload["tools"] = [{"google_search": {}}]
+
     try:
         with requests.post(target_url, json=payload, headers=headers, stream=True, timeout=60) as resp:
             if resp.status_code != 200:
@@ -431,6 +434,7 @@ def stream_gemini_native(model_name, messages):
                 return
 
             buffer = ""
+            grounding_meta = None
             for line in resp.iter_lines():
                 if not line: continue
                 decoded_line = line.decode('utf-8').strip()
@@ -447,7 +451,10 @@ def stream_gemini_native(model_name, messages):
                     buffer = "" 
                     candidates = chunk_json.get('candidates', [])
                     if candidates:
-                        parts = candidates[0].get('content', {}).get('parts', [])
+                        cand = candidates[0]
+                        if cand.get('groundingMetadata'):
+                            grounding_meta = cand.get('groundingMetadata')
+                        parts = cand.get('content', {}).get('parts', [])
                         text_chunk = ""
                         for part in parts:
                             if 'text' in part: text_chunk += part['text']
@@ -465,6 +472,29 @@ def stream_gemini_native(model_name, messages):
                 except Exception as e:
                     print(f"Gemini Parse Error: {e}")
                     buffer = ""
+
+            if web_search and grounding_meta:
+                sources = []
+                seen_uris = set()
+                for chunk in grounding_meta.get('groundingChunks', []):
+                    web = chunk.get('web', {})
+                    uri = web.get('uri')
+                    title = web.get('title') or uri
+                    if uri and uri not in seen_uris:
+                        seen_uris.add(uri)
+                        sources.append(f"[{title}]({uri})")
+                
+                if sources:
+                    sources_md = "\n\n---\n**🔍 搜索来源：**\n" + "\n".join([f"- {s}" for s in sources[:5]])
+                    openai_chunk = {
+                        "id": "chatcmpl-gemini",
+                        "object": "chat.completion.chunk",
+                        "created": int(time.time()),
+                        "model": model_name,
+                        "choices": [{"index": 0, "delta": {"content": sources_md}, "finish_reason": None}]
+                    }
+                    yield f"data: {json.dumps(openai_chunk)}\n\n"
+
             yield "data: [DONE]\n\n"
     except Exception as e:
         yield f"data: {json.dumps({'error': str(e)})}\n\n"
@@ -491,7 +521,7 @@ User message: {first_message}
 
 Title:"""
     
-    model_name = "gemini-3.6-flash"
+    model_name = "gemini-3.5-flash-lite"
     target_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
     headers = {"Content-Type": "application/json"}
     
@@ -534,12 +564,13 @@ def chat_proxy():
     data = request.json
     model = data.get('model', 'gemini-3.6-flash')
     raw_messages = data.get('messages', [])
+    web_search = data.get('web_search', False) or data.get('enable_search', False) or data.get('search', False)
     
     MAX_HISTORY = 20
     if len(raw_messages) > MAX_HISTORY:
         raw_messages = raw_messages[-MAX_HISTORY:]
 
-    return Response(stream_with_context(stream_gemini_native(model, raw_messages)), content_type='text/event-stream')
+    return Response(stream_with_context(stream_gemini_native(model, raw_messages, web_search=web_search)), content_type='text/event-stream')
 
 @app.route('/api/images/generations', methods=['POST'])
 def image_proxy():

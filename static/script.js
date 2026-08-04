@@ -7,12 +7,29 @@ const chatContainer = document.getElementById('chat-container');
 const userInput = document.getElementById('user-input');
 const sendBtn = document.getElementById('send-btn');
 const modelSelect = document.getElementById('model-select');
+const searchToggleBtn = document.getElementById('search-toggle-btn');
 const resolutionSelect = document.getElementById('resolution-select');
 const sidebarNewChatBtn = document.getElementById('sidebar-new-chat-btn');
 const toggleSidebarBtn = document.getElementById('toggle-sidebar-btn');
 const closeSidebarBtn = document.getElementById('close-sidebar-btn');
 const sidebar = document.getElementById('history-sidebar');
 const historyList = document.getElementById('history-list');
+
+// Search Toggle State
+let isSearchEnabled = localStorage.getItem('search_enabled') === 'true';
+function updateSearchToggleUI() {
+    if (!searchToggleBtn) return;
+    searchToggleBtn.classList.toggle('active', isSearchEnabled);
+}
+
+if (searchToggleBtn) {
+    updateSearchToggleUI();
+    searchToggleBtn.addEventListener('click', () => {
+        isSearchEnabled = !isSearchEnabled;
+        updateSearchToggleUI();
+        localStorage.setItem('search_enabled', isSearchEnabled);
+    });
+}
 
 // Image Upload Elements
 const uploadTriggerBtn = document.getElementById('upload-trigger-btn');
@@ -1462,6 +1479,7 @@ async function generateText(prompt, model) {
             body: JSON.stringify({
                 model: model,
                 messages: messageHistory,
+                web_search: isSearchEnabled,
                 stream: true
             }),
             signal: currentAbortController.signal
@@ -1582,7 +1600,7 @@ sidebarNewChatBtn.addEventListener('click', () => {
 let previousModel = modelSelect.value;
 const imageModel = 'gemini-3.1-flash-image';
 
-function updateResolutionVisibility(model) {
+function updateControlsVisibility(model) {
     if (resolutionSelect) {
         if (model === imageModel) {
             resolutionSelect.style.display = 'inline-block';
@@ -1590,16 +1608,23 @@ function updateResolutionVisibility(model) {
             resolutionSelect.style.display = 'none';
         }
     }
+    if (searchToggleBtn) {
+        if (model === imageModel) {
+            searchToggleBtn.style.display = 'none';
+        } else {
+            searchToggleBtn.style.display = 'inline-flex';
+        }
+    }
 }
 
-// 初始化时控制分辨率下拉框是否显示
-updateResolutionVisibility(previousModel);
+// 初始化时控制控件是否显示
+updateControlsVisibility(previousModel);
 
 modelSelect.addEventListener('change', () => {
     const newModel = modelSelect.value;
     
-    // 控制分辨率下拉框是否显示
-    updateResolutionVisibility(newModel);
+    // 控制相关控件（分辨率下拉框、搜索开关）是否显示
+    updateControlsVisibility(newModel);
 
     // 如果切换到生图模型或从生图模型切出，自动开启新对话
     if (newModel === imageModel || previousModel === imageModel) {
