@@ -19,14 +19,10 @@ load_dotenv()
 app = Flask(__name__, static_folder='static')
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "complex_fixed_secret_key_for_persistence")
 app.config['PERMANENT_SESSION_LIFETIME'] = 3600 * 24 * 30 
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 最大上传 50MB
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 全局 API 请求最大限制 50MB
 
 # --- Configuration ---
 SITE_PASSWORD = os.getenv("SITE_PASSWORD", "lwtlwt123")
-
-# OpenAI Config
-OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 # Gemini Config
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
@@ -77,113 +73,86 @@ def get_client_ip():
     return request.remote_addr
 
 def cleanup_old_images():
-    """清理旧图片/签名，保留最新的500张"""
+    """清理旧文件/签名，保留最新的500张/个"""
     try:
-        # 获取所有图片文件及其创建时间
         files = glob.glob(os.path.join(IMAGE_CACHE_DIR, "*"))
         if len(files) <= 1000:
             return
-
-        # 按时间排序 (旧 -> 新)
         files.sort(key=os.path.getctime)
-        
-        # 删除旧的，只留最新的500张
         files_to_delete = files[:len(files) - 500]
         for f in files_to_delete:
             try:
                 os.remove(f)
             except Exception as e:
-                print(f"Error deleting old image {f}: {e}")
+                print(f"Error deleting old cached file {f}: {e}")
     except Exception as e:
         print(f"Cleanup failed: {e}")
 
+def process_and_save_file(file):
+    """保存上传的文件（图片或PDF），严格检查最大10MB限制"""
+    cleanup_old_images()
 
-def process_and_save_image(file):
-    """保存图片，检查大小并Resize，自动转换 HEIC/HEIF 格式为 JPEG"""
-    cleanup_old_images() # 每次上传前检查是否需要清理
-
-    original_ext = os.path.splitext(file.filename)[1].lower()
-    print(f"[Upload] Received file: {file.filename}, extension: {original_ext}")
+    # 校验文件大小 (10MB Max per file)
+    file.seek(0, os.SEEK_END)
+    size = file.tell()
+    file.seek(0)
     
-    # 检查是否是 HEIC/HEIF 格式（iPhone 默认图片格式）
+    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+    if size > MAX_FILE_SIZE:
+        raise ValueError(f"File '{file.filename}' exceeds 10MB size limit (文件大小不能超过10MB)")
+
+    original_filename = file.filename or "file.dat"
+    original_ext = os.path.splitext(original_filename)[1].lower()
+    
+    # 检查是否为 PDF 文档
+    if original_ext == '.pdf' or file.mimetype == 'application/pdf':
+        filename = f"{uuid.uuid4()}.pdf"
+        filepath = os.path.join(IMAGE_CACHE_DIR, filename)
+        file.save(filepath)
+        print(f"[Upload PDF] Saved PDF: {filepath}, size: {size} bytes")
+        return filename, 'pdf', original_filename
+
+    # 图片处理逻辑
     is_heic = original_ext in ['.heic', '.heif']
-    
-    # 确定最终保存的扩展名
     if is_heic:
-        # HEIC/HEIF 转换为 JPEG
         ext = '.jpg'
-        print(f"[Upload] Detected HEIC/HEIF format, will convert to JPEG")
     elif original_ext in ['.jpg', '.jpeg', '.png', '.webp', '.gif']:
         ext = original_ext
     else:
-        # 未知格式也尝试转换为 JPEG
         ext = '.jpg'
-        print(f"[Upload] Unknown format '{original_ext}', will attempt to convert to JPEG")
-    
+
     filename = f"{uuid.uuid4()}{ext}"
     filepath = os.path.join(IMAGE_CACHE_DIR, filename)
-
-    # 先保存原始文件到临时路径以便处理
     temp_filepath = os.path.join(IMAGE_CACHE_DIR, f"temp_{uuid.uuid4()}{original_ext}")
     file.save(temp_filepath)
-    print(f"[Upload] Saved temp file: {temp_filepath}, size: {os.path.getsize(temp_filepath)} bytes")
 
     try:
         with Image.open(temp_filepath) as img:
-            print(f"[Upload] Opened image successfully, mode: {img.mode}, size: {img.size}")
-            
-            # 检查条件
             file_size = os.path.getsize(temp_filepath)
             width, height = img.size
-            num_pixels = width * height
-
-            # 对于 HEIC/HEIF、未知格式或大图片进行处理
-            needs_resize = file_size > 5 * 1024 * 1024 or num_pixels > 1e7
+            needs_resize = file_size > 5 * 1024 * 1024 or (width * height) > 1e7
             needs_conversion = is_heic or (original_ext not in ['.jpg', '.jpeg', '.png', '.webp', '.gif'])
-            
+
             if needs_conversion or needs_resize:
-                # 如果需要 resize
                 if needs_resize:
                     img.thumbnail((1920, 1920))
-                    print(f"[Upload] Resized large image to: {img.size}")
-                
-                # 转换颜色模式（HEIC 可能有 RGBA 或其他模式）
                 if img.mode not in ("RGB",):
-                    print(f"[Upload] Converting color mode from {img.mode} to RGB")
                     img = img.convert("RGB")
-                
-                # 保存为 JPEG
                 img.save(filepath, "JPEG", quality=85)
-                print(f"[Upload] Saved converted image: {filepath}")
             else:
-                # 不需要转换，直接移动文件
                 shutil.move(temp_filepath, filepath)
-                temp_filepath = None  # 标记已经移动，不需要删除
-                print(f"[Upload] Moved file directly: {filepath}")
-                
+                temp_filepath = None
     except Exception as e:
-        print(f"[Upload] Image processing error: {e}")
-        import traceback
-        traceback.print_exc()
-        
-        # 如果处理失败，抛出异常让调用方知道
         if temp_filepath and os.path.exists(temp_filepath):
-            try:
-                os.remove(temp_filepath)
-            except:
-                pass
+            try: os.remove(temp_filepath)
+            except: pass
         raise Exception(f"Failed to process image: {str(e)}")
-        
     finally:
-        # 清理临时文件
         if temp_filepath and os.path.exists(temp_filepath):
-            try:
-                os.remove(temp_filepath)
-                print(f"[Upload] Cleaned up temp file: {temp_filepath}")
-            except:
-                pass
+            try: os.remove(temp_filepath)
+            except: pass
 
-    return filename
+    return filename, 'image', original_filename
 
 def encode_image_from_path(image_path):
     """读取本地图片并转换为Base64，供LLM API调用"""
@@ -193,6 +162,63 @@ def encode_image_from_path(image_path):
     except:
         return None
 
+# Gemini Files API 缓存管理
+GEMINI_FILE_CACHE = {}
+
+def get_gemini_file_uri(local_filename, original_name=None):
+    """
+    通过 Google Gemini Files API 上传本地 PDF 文件并返回 fileUri
+    参考: https://ai.google.dev/gemini-api/docs/document-processing#python_2
+    """
+    cached = GEMINI_FILE_CACHE.get(local_filename)
+    if cached and (time.time() - cached.get("timestamp", 0) < 3600 * 24):
+        return cached["uri"]
+
+    local_path = os.path.join(IMAGE_CACHE_DIR, local_filename)
+    if not os.path.exists(local_path):
+        raise FileNotFoundError(f"Local cached file {local_filename} not found")
+
+    display_name = original_name or local_filename
+    print(f"[Gemini Files API] Uploading local PDF {local_path} ({os.path.getsize(local_path)} bytes)...")
+
+    init_url = f"https://generativelanguage.googleapis.com/upload/v1beta/files?key={GEMINI_API_KEY}"
+    file_size = os.path.getsize(local_path)
+    headers = {
+        "X-Goog-Upload-Protocol": "resumable",
+        "X-Goog-Upload-Command": "start",
+        "X-Goog-Upload-Header-Content-Length": str(file_size),
+        "X-Goog-Upload-Header-Content-Type": "application/pdf",
+        "Content-Type": "application/json"
+    }
+    file_metadata = {"file": {"display_name": display_name}}
+
+    resp = requests.post(init_url, headers=headers, json=file_metadata, timeout=30)
+    resp.raise_for_status()
+    upload_url = resp.headers.get("X-Goog-Upload-URL")
+
+    with open(local_path, "rb") as f:
+        file_bytes = f.read()
+
+    upload_headers = {
+        "X-Goog-Upload-Offset": "0",
+        "X-Goog-Upload-Command": "upload, finalize",
+        "Content-Type": "application/pdf"
+    }
+    up_resp = requests.post(upload_url, headers=upload_headers, data=file_bytes, timeout=60)
+    up_resp.raise_for_status()
+
+    res_json = up_resp.json()
+    file_info = res_json.get("file", {})
+    file_uri = file_info.get("uri")
+    print(f"[Gemini Files API] Successfully uploaded PDF. URI: {file_uri}")
+
+    GEMINI_FILE_CACHE[local_filename] = {
+        "uri": file_uri,
+        "name": file_info.get("name"),
+        "timestamp": time.time()
+    }
+    return file_uri
+
 # --- Routes ---
 
 @app.route('/')
@@ -201,7 +227,7 @@ def index():
 
 @app.route('/assets/<path:filename>')
 def serve_assets(filename):
-    """提供assets目录的静态文件访问（如logo）"""
+    """提供assets目录的静态文件访问"""
     return send_from_directory('assets', filename)
 
 @app.route('/<path:path>')
@@ -244,7 +270,7 @@ def login():
             return jsonify({"success": False, "error": "Too many failed attempts. Banned."}), 403
         else:
             save_security_data(security_data)
-            return jsonify({"success": False, "error": f"Incorrect password."}), 401
+            return jsonify({"success": False, "error": "Incorrect password."}), 401
 
 @app.route('/api/auth/check', methods=['GET'])
 def check_auth():
@@ -257,12 +283,14 @@ def check_session():
 
 @app.route('/images/cache/<path:filename>')
 def serve_cached_image(filename):
-    """提供图片访问"""
+    """提供图片及PDF文件访问"""
+    if filename.endswith('.pdf'):
+        return send_from_directory(IMAGE_CACHE_DIR, filename, mimetype='application/pdf')
     return send_from_directory(IMAGE_CACHE_DIR, filename)
 
 @app.route('/api/upload', methods=['POST'])
-def upload_image():
-    """处理图片上传"""
+def upload_file_route():
+    """处理图片和PDF文档上传，单文件限制10MB"""
     if not session.get('authenticated'):
         return jsonify({"error": "Unauthorized"}), 401
 
@@ -274,68 +302,23 @@ def upload_image():
         return jsonify({"error": "No selected file"}), 400
 
     try:
-        filename = process_and_save_image(file)
-        # 返回相对URL
+        filename, file_type, original_name = process_and_save_file(file)
         url = f"/images/cache/{filename}"
-        return jsonify({"url": url})
+        return jsonify({
+            "url": url,
+            "name": original_name,
+            "file_type": file_type,
+            "is_pdf": file_type == 'pdf'
+        })
+    except ValueError as ve:
+        return jsonify({"error": str(ve)}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
-# --- Chat Logic (Modified for Local Image Handling) ---
-
-def process_messages_for_llm(messages):
-    processed_messages = []
-    for msg in messages:
-        new_msg = msg.copy()
-        content = msg.get('content')
-        
-        if isinstance(content, list):
-            new_content = []
-            for item in content:
-                if item.get('type') == 'image_url':
-                    image_url_obj = item.get('image_url', {})
-                    url = image_url_obj.get('url', '')
-                    
-                    if url.startswith('/images/cache/'):
-                        filename = url.split('/')[-1]
-                        local_path = os.path.join(IMAGE_CACHE_DIR, filename)
-                        base64_str = encode_image_from_path(local_path)
-                        
-                        if base64_str:
-                            mime_type = "image/jpeg"
-                            if filename.endswith('.png'): mime_type = "image/png"
-                            elif filename.endswith('.webp'): mime_type = "image/webp"
-                            
-                            new_content.append({
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:{mime_type};base64,{base64_str}" 
-                                }
-                            })
-                        else:
-                            raise Exception("Invalid image URL")
-                    else:
-                        raise Exception("Invalid image URL")
-                else:
-                    new_content.append(item)
-
-                if 'thoughtSignature' in item:
-                    if item.get('thoughtSignature').startswith('/images/cache/'):
-                        filename = item.get('thoughtSignature').split('/')[-1]
-                        local_path = os.path.join(IMAGE_CACHE_DIR, filename)
-                        with open(local_path, 'r') as f:
-                            base64_str = f.read()
-                        new_content[-1]['thoughtSignature'] = base64_str
-                    else:
-                        raise Exception("Invalid signature URL")
-
-            new_msg['content'] = new_content
-            
-        processed_messages.append(new_msg)
-    return processed_messages
+# --- Chat & Gemini Logic ---
 
 def convert_openai_to_gemini(messages):
+    """转换前端消息列表为 Google Gemini 原生 contents 结构"""
     gemini_contents = []
     for msg in messages:
         role = msg.get('role')
@@ -350,34 +333,82 @@ def convert_openai_to_gemini(messages):
             parts.append({"text": content})
         elif isinstance(content, list):
             for item in content:
-                if item.get("type") == "text":
+                item_type = item.get("type")
+                if item_type == "text":
                     parts.append({"text": item.get("text", "")})
-                elif item.get("type") == "image_url":
+                elif item_type == "image_url":
                     image_url_obj = item.get("image_url", {})
-                    image_url = image_url_obj.get("url", "")
+                    url = image_url_obj.get("url", "")
 
-                    if image_url.startswith("data:"):
+                    if url.startswith("/images/cache/"):
+                        filename = url.split("/")[-1]
+                        local_path = os.path.join(IMAGE_CACHE_DIR, filename)
+                        
+                        # 处理 PDF 文档
+                        if filename.lower().endswith(".pdf"):
+                            try:
+                                original_name = item.get("name") or filename
+                                file_uri = get_gemini_file_uri(filename, original_name)
+                                parts.append({
+                                    "fileData": {
+                                        "mimeType": "application/pdf",
+                                        "fileUri": file_uri
+                                    }
+                                })
+                            except Exception as e:
+                                print(f"[Gemini] PDF process error: {e}")
+                        else:
+                            # 图片 base64 inlineData
+                            base64_str = encode_image_from_path(local_path)
+                            if base64_str:
+                                mime_type = "image/jpeg"
+                                if filename.endswith('.png'): mime_type = "image/png"
+                                elif filename.endswith('.webp'): mime_type = "image/webp"
+                                parts.append({
+                                    "inlineData": {
+                                        "mimeType": mime_type,
+                                        "data": base64_str
+                                    }
+                                })
+                    elif url.startswith("data:"):
                         try:
-                            header, base64_data = image_url.split(",", 1)
+                            header, base64_data = url.split(",", 1)
                             mime_type = header.split(":")[1].split(";")[0]
-                            
-                            part = {
+                            parts.append({
                                 "inlineData": {
                                     "mimeType": mime_type,
                                     "data": base64_data
                                 }
-                            }
-                            parts.append(part)
+                            })
                         except: pass
 
+                elif item_type == "file_url":
+                    file_url_obj = item.get("file_url", {})
+                    url = file_url_obj.get("url", "") or item.get("url", "")
+                    if url.startswith("/images/cache/"):
+                        filename = url.split("/")[-1]
+                        original_name = file_url_obj.get("name") or item.get("name") or filename
+                        try:
+                            file_uri = get_gemini_file_uri(filename, original_name)
+                            parts.append({
+                                "fileData": {
+                                    "mimeType": "application/pdf",
+                                    "fileUri": file_uri
+                                }
+                            })
+                        except Exception as e:
+                            print(f"[Gemini] PDF process error: {e}")
+
                 if 'thoughtSignature' in item:
-                    parts[-1]['thoughtSignature'] = item.get('thoughtSignature')
+                    if parts:
+                        parts[-1]['thoughtSignature'] = item.get('thoughtSignature')
         
         if parts:
             gemini_contents.append({"role": gemini_role, "parts": parts})
     return gemini_contents
 
 def stream_gemini_native(model_name, messages):
+    """使用 Google Gemini 原生 API 进行流式生成"""
     target_url = GEMINI_NATIVE_URL.format(model=model_name) + f"?key={GEMINI_API_KEY}"
     headers = {"Content-Type": "application/json"}
     contents = convert_openai_to_gemini(messages)
@@ -392,7 +423,7 @@ def stream_gemini_native(model_name, messages):
     }
 
     try:
-        with requests.post(target_url, json=payload, headers=headers, stream=True) as resp:
+        with requests.post(target_url, json=payload, headers=headers, stream=True, timeout=60) as resp:
             if resp.status_code != 200:
                 error_msg = f"Gemini API Error ({resp.status_code}): {resp.text}"
                 print(error_msg)
@@ -450,11 +481,9 @@ def generate_title():
     if not first_message:
         return jsonify({"title": "New Chat"})
     
-    # 限制消息长度以避免过长的请求
     if len(first_message) > 500:
         first_message = first_message[:500] + "..."
     
-    # 使用固定的 prompt 模板
     title_prompt = f"""Based on the following user message, generate a short and concise title in Chinese that summarizes the topic. 
 Only respond with the title itself, no quotes, no explanation, no punctuation at the end.
 
@@ -462,8 +491,7 @@ User message: {first_message}
 
 Title:"""
     
-    # 使用 gemini-2.5-flash 模型
-    model_name = "gemini-2.5-flash"
+    model_name = "gemini-3.6-flash"
     target_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
     headers = {"Content-Type": "application/json"}
     
@@ -488,10 +516,7 @@ Title:"""
         
         parts = candidates[0].get('content', {}).get('parts', [])
         if parts and 'text' in parts[0]:
-            title = parts[0]['text'].strip()
-            # 清理标题：移除引号和多余空白
-            title = title.strip('"\'')
-            # 限制长度
+            title = parts[0]['text'].strip().strip('"\'')
             if len(title) > 50:
                 title = title[:47] + "..."
             return jsonify({"title": title if title else "New Chat"})
@@ -501,57 +526,20 @@ Title:"""
         print(f"Title generation failed: {e}")
         return jsonify({"title": "New Chat"})
 
-
 @app.route('/api/chat/completions', methods=['POST'])
 def chat_proxy():
+    """统一的对话 API 接口，全面基于 Google Gemini 原生 API"""
     if not check_session(): return jsonify({"error": "Unauthorized"}), 401
     
     data = request.json
-    model = data.get('model', 'gpt-3.5-turbo')
+    model = data.get('model', 'gemini-3.6-flash')
     raw_messages = data.get('messages', [])
     
-    # 限制历史长度
     MAX_HISTORY = 20
-    if len(raw_messages) > MAX_HISTORY: raw_messages = raw_messages[-MAX_HISTORY:]
+    if len(raw_messages) > MAX_HISTORY:
+        raw_messages = raw_messages[-MAX_HISTORY:]
 
-    # 将本地 URL 转换为 Base64 供 API 使用
-    processed_messages = process_messages_for_llm(raw_messages)
-
-    # --- 1. Gemini 分支 ---
-    if "gemini" in model.lower():
-        # stream_gemini_native 内部会调用 convert_openai_to_gemini
-        return Response(stream_with_context(stream_gemini_native(model, processed_messages)), content_type='text/event-stream')
-    
-    # --- 2. OpenAI 分支 ---
-    else:
-        headers = {
-            "Authorization": f"Bearer {OPENAI_API_KEY}",
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 ..."
-        }
-        
-        has_system = any(m.get('role') == 'system' for m in processed_messages)
-        if not has_system: 
-            processed_messages.insert(0, {"role": "system", "content": DEFAULT_SYSTEM_PROMPT})
-        
-        payload = {
-            "model": model,
-            "messages": processed_messages, # 发送带 Base64 的消息
-            "stream": True
-        }
-
-        try:
-            resp = requests.post(f"{OPENAI_BASE_URL}/chat/completions", json=payload, headers=headers, stream=True)
-            if resp.status_code != 200:
-                return jsonify({"error": resp.text}), resp.status_code
-
-            def generate_openai():
-                for chunk in resp.iter_content(chunk_size=1024):
-                    if chunk: yield chunk
-
-            return Response(stream_with_context(generate_openai()), content_type=resp.headers.get('Content-Type'))
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
+    return Response(stream_with_context(stream_gemini_native(model, raw_messages)), content_type='text/event-stream')
 
 @app.route('/api/images/generations', methods=['POST'])
 def image_proxy():
@@ -570,8 +558,7 @@ def image_proxy():
                     {"type": "image_url", "image_url": {"url": req_data.get('image_url')}}
                 ]
 
-    processed_messages = process_messages_for_llm(messages)
-    gemini_contents = convert_openai_to_gemini(processed_messages)
+    gemini_contents = convert_openai_to_gemini(messages)
     
     gemini_model = req_data.get('model', 'gemini-3.1-flash-image')
     if gemini_model not in ["gemini-3.1-flash-image", "gemini-3-pro-image-preview"]:
@@ -612,7 +599,6 @@ def image_proxy():
         if not target_part: 
             return jsonify({"error": {"message": "Model refused or returned no image."}}), 500
 
-        # 获取图片数据
         image_data_obj = target_part.get('inlineData') or target_part.get('inline_data')
         img_data = base64.b64decode(image_data_obj.get('data'))
         
@@ -628,12 +614,11 @@ def image_proxy():
         image_url = f"/images/cache/{filename}{file_ext}"
         cleanup_old_images()
 
-        # 写入签名
         raw_thought_signature = target_part.get('thoughtSignature')
         sig_ext = ".sig"
         sig_path = os.path.join(IMAGE_CACHE_DIR, f"{filename}{sig_ext}")
         with open(sig_path, "w") as f:
-            f.write(raw_thought_signature)
+            f.write(raw_thought_signature or "")
 
         sig_url = f"/images/cache/{filename}{sig_ext}"
 

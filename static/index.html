@@ -122,7 +122,7 @@
             <main id="chat-container">
                 <div class="welcome-message">
                     <h3>Hello!</h3>
-                    <p>I'm your AI assistant. Ask me anything or upload images.</p>
+                    <p>I'm your AI assistant. Ask me anything or upload images and PDF documents (max 10MB).</p>
                 </div>
             </main>
 
@@ -131,9 +131,9 @@
                     <div id="image-preview-container" class="image-preview-container hidden"></div>
 
                     <div class="input-wrapper">
-                        <input type="file" id="image-upload-input" multiple accept="image/*" class="hidden">
+                        <input type="file" id="image-upload-input" multiple accept="image/*,.pdf,application/pdf" class="hidden">
 
-                        <button id="upload-trigger-btn" class="icon-btn" title="Upload Images">
+                        <button id="upload-trigger-btn" class="icon-btn" title="Upload Images or PDF Documents">
                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
                                 fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                                 stroke-linejoin="round">
@@ -157,7 +157,7 @@
                     <div class="menu-bar">
                         <div class="menu-left" style="display: flex; gap: 0.5rem; align-items: center;">
                             <select id="model-select">
-                                <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
+                                <option value="gemini-3.6-flash">Gemini 3.6 Flash</option>
                                 <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro</option>
                                 <option value="gemini-3.1-flash-image">Nano Banana 2</option>
                             </select>

@@ -545,6 +545,29 @@ function renderThumbnail(container, url) {
     container.appendChild(img);
 }
 
+function renderPdfCard(container, url, filename) {
+    const card = document.createElement('a');
+    card.className = 'pdf-document-card';
+    card.href = url;
+    card.target = '_blank';
+    card.title = `View ${filename || 'PDF Document'}`;
+    card.innerHTML = `
+        <div class="pdf-card-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+            </svg>
+        </div>
+        <div class="pdf-card-details">
+            <span class="pdf-card-name">${escapeHtml(filename || 'Document.pdf')}</span>
+            <span class="pdf-card-sub">PDF Document • Click to view</span>
+        </div>
+    `;
+    container.appendChild(card);
+}
+
 function openLightbox(url) {
     // 重新扫描页面上的所有图片，确保顺序正确 (因为历史记录加载顺序可能不同)
     // 简单的做法是直接用 currentSessionImages，但为了点击时的即时性，
@@ -820,12 +843,21 @@ uploadTriggerBtn.addEventListener('click', () => {
     imageUploadInput.click();
 });
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
 imageUploadInput.addEventListener('change', (e) => {
     const files = Array.from(e.target.files);
 
     if (selectedImages.length + files.length > 9) {
-        alert("You can upload a maximum of 9 images.");
+        alert("You can upload a maximum of 9 files.");
         return;
+    }
+
+    for (const file of files) {
+        if (file.size > MAX_FILE_SIZE) {
+            alert(`File "${file.name}" exceeds the 10MB size limit (文件大小不能超过10MB).`);
+            return;
+        }
     }
 
     selectedImages = [...selectedImages, ...files];
@@ -846,17 +878,26 @@ function renderImagePreviews() {
 
     selectedImages.forEach((file, index) => {
         const item = document.createElement('div');
-        item.className = 'preview-item';
+        const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
 
-        const img = document.createElement('img');
-        img.src = URL.createObjectURL(file);
+        if (isPdf) {
+            item.className = 'preview-item pdf-preview-item';
+            item.innerHTML = `
+                <div class="pdf-preview-icon">📄</div>
+                <div class="pdf-preview-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</div>
+            `;
+        } else {
+            item.className = 'preview-item';
+            const img = document.createElement('img');
+            img.src = URL.createObjectURL(file);
+            item.appendChild(img);
+        }
 
         const removeBtn = document.createElement('button');
         removeBtn.className = 'preview-remove-btn';
         removeBtn.innerHTML = '✕';
         removeBtn.onclick = () => removeImage(index);
 
-        item.appendChild(img);
         item.appendChild(removeBtn);
         imagePreviewContainer.appendChild(item);
     });
@@ -868,7 +909,6 @@ function removeImage(index) {
 }
 
 async function uploadFile(file) {
-    // 直接上传原始文件，后端会处理 HEIC/HEIF 等格式转换
     const formData = new FormData();
     formData.append('file', file);
 
@@ -882,7 +922,7 @@ async function uploadFile(file) {
         throw new Error(errorData.error || 'Upload failed');
     }
     const data = await res.json();
-    return data.url; // 返回如 /images/cache/uuid.jpg
+    return data; // 返回如 { url: "/images/cache/uuid.pdf", name: "original.pdf", is_pdf: true }
 }
 
 // Chat Logic
@@ -926,9 +966,17 @@ function appendMessage(role, content, isImage = false, messageIndex = -1) {
     // 处理 Array 格式 (多模态)
     if (Array.isArray(content)) {
         content.forEach(item => {
-            if (item.type === 'image_url') {
-                const imgUrl = item.image_url.url;
-                renderThumbnail(contentDiv, imgUrl);
+            if (item.type === 'file_url') {
+                const pdfUrl = item.file_url ? item.file_url.url : item.url;
+                const pdfName = (item.file_url ? item.file_url.name : item.name) || 'document.pdf';
+                renderPdfCard(contentDiv, pdfUrl, pdfName);
+            } else if (item.type === 'image_url') {
+                const imgUrl = item.image_url ? item.image_url.url : item.url;
+                if (imgUrl && imgUrl.toLowerCase().endsWith('.pdf')) {
+                    renderPdfCard(contentDiv, imgUrl, item.name || 'document.pdf');
+                } else {
+                    renderThumbnail(contentDiv, imgUrl);
+                }
             } else if (item.type === 'text') {
                 const textDiv = document.createElement('div');
                 renderMarkdownWithMath(item.text, textDiv);
@@ -1253,40 +1301,45 @@ async function handleSend() {
     let messageContent = [];
     const tempImageUrls = []; // 用于本地预览
 
-    // 1. 上传图片 (如果有)
+    // 1. 上传文件 (图片或PDF)
     if (selectedImages.length > 0) {
-        // 显示一个临时的 loading 指示 (可选)
-        const { messageDiv: loadingMsgDiv } = appendMessage('user', "📤 Uploading images...");
+        const { messageDiv: loadingMsgDiv } = appendMessage('user', "📤 Uploading file(s)...");
 
         try {
             // 并行上传
             const uploadPromises = selectedImages.map(file => uploadFile(file));
-            const serverUrls = await Promise.all(uploadPromises);
+            const uploadResults = await Promise.all(uploadPromises);
 
             // 构建消息内容
             if (text) messageContent.push({ type: "text", text: text });
 
-            serverUrls.forEach(url => {
-                messageContent.push({
-                    type: "image_url",
-                    image_url: { url: url } // 这里存的是 /images/cache/xxx.jpg
-                });
-                tempImageUrls.push(url);
+            uploadResults.forEach(res => {
+                const isPdf = res.is_pdf || (res.url && res.url.toLowerCase().endsWith('.pdf'));
+                if (isPdf) {
+                    messageContent.push({
+                        type: "file_url",
+                        file_url: { url: res.url, name: res.name },
+                        name: res.name
+                    });
+                } else {
+                    messageContent.push({
+                        type: "image_url",
+                        image_url: { url: res.url },
+                        name: res.name
+                    });
+                }
+                tempImageUrls.push(res.url);
             });
 
             // 移除 Loading
             loadingMsgDiv.remove();
 
         } catch (e) {
-            // console.error("Upload failed", e);
             if (loadingMsgDiv) loadingMsgDiv.remove();
-            alert("Failed to upload images: " + e.message);
+            alert("Failed to upload file(s): " + e.message);
             return;
         }
     } else {
-        // 纯文本处理
-        messageContent = text; // 保持字符串以兼容旧逻辑，或者统一成数组
-        // 为了统一，建议后端处理好，或者这里：
         if (text) messageContent = [{ type: "text", text: text }];
     }
 
