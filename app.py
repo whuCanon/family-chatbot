@@ -112,6 +112,17 @@ def process_and_save_file(file):
         print(f"[Upload PDF] Saved PDF: {filepath}, size: {size} bytes")
         return filename, 'pdf', original_filename
 
+    # 检查是否为文本文件
+    TEXT_EXTENSIONS = ['.txt', '.json', '.md', '.csv', '.log', '.xml', '.yaml', '.yml', '.py', '.js', '.html', '.css', '.sh', '.sql', '.conf', '.ini', '.toml']
+    TEXT_MIMETYPES = ['text/', 'application/json', 'application/xml', 'application/x-yaml']
+    is_text = original_ext in TEXT_EXTENSIONS or any(file.mimetype and file.mimetype.startswith(m) for m in TEXT_MIMETYPES)
+    if is_text:
+        filename = f"{uuid.uuid4()}{original_ext}"
+        filepath = os.path.join(IMAGE_CACHE_DIR, filename)
+        file.save(filepath)
+        print(f"[Upload Text] Saved text file: {filepath}, size: {size} bytes")
+        return filename, 'text', original_filename
+
     # 图片处理逻辑
     is_heic = original_ext in ['.heic', '.heif']
     if is_heic:
@@ -388,16 +399,29 @@ def convert_openai_to_gemini(messages):
                     if url.startswith("/images/cache/"):
                         filename = url.split("/")[-1]
                         original_name = file_url_obj.get("name") or item.get("name") or filename
-                        try:
-                            file_uri = get_gemini_file_uri(filename, original_name)
-                            parts.append({
-                                "fileData": {
-                                    "mimeType": "application/pdf",
-                                    "fileUri": file_uri
-                                }
-                            })
-                        except Exception as e:
-                            print(f"[Gemini] PDF process error: {e}")
+                        file_type = item.get("file_type") or file_url_obj.get("file_type", "")
+                        local_path = os.path.join(IMAGE_CACHE_DIR, filename)
+
+                        # 文本文件：直接读取内容作为 text part
+                        if file_type == 'text' or not filename.lower().endswith('.pdf'):
+                            try:
+                                with open(local_path, 'r', encoding='utf-8') as f:
+                                    text_content = f.read()
+                                parts.append({"text": f"📎 File: {original_name}\n```\n{text_content}\n```"})
+                            except Exception as e:
+                                print(f"[Gemini] Text file read error: {e}")
+                        else:
+                            # PDF 文档：通过 Gemini Files API 上传
+                            try:
+                                file_uri = get_gemini_file_uri(filename, original_name)
+                                parts.append({
+                                    "fileData": {
+                                        "mimeType": "application/pdf",
+                                        "fileUri": file_uri
+                                    }
+                                })
+                            except Exception as e:
+                                print(f"[Gemini] PDF process error: {e}")
 
                 if 'thoughtSignature' in item:
                     if parts:
@@ -566,7 +590,7 @@ def chat_proxy():
     raw_messages = data.get('messages', [])
     web_search = data.get('web_search', False) or data.get('enable_search', False) or data.get('search', False)
     
-    MAX_HISTORY = 20
+    MAX_HISTORY = 50
     if len(raw_messages) > MAX_HISTORY:
         raw_messages = raw_messages[-MAX_HISTORY:]
 

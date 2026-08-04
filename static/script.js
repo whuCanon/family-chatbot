@@ -428,26 +428,15 @@ function loadHistory() {
     const stored = localStorage.getItem('chat_history');
     if (stored) {
         conversations = JSON.parse(stored);
-        // 数据清理：加载时也顺便检查一下是否有过期的
-        cleanOldHistory();
     }
     renderHistoryList();
 }
 
 function cleanOldHistory() {
-    const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
-    const initialCount = conversations.length;
-    conversations = conversations.filter(c => c.timestamp > thirtyDaysAgo);
-
-    if (conversations.length !== initialCount) {
-        saveHistory();
-    }
+    // 永久保存，不再按时间清理
 }
 
 function saveHistory() {
-    const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
-    conversations = conversations.filter(c => c.timestamp > thirtyDaysAgo);
-
     try {
         localStorage.setItem('chat_history', JSON.stringify(conversations));
     } catch (e) {
@@ -683,7 +672,7 @@ function startNewChat() {
     messageHistory = [];
     selectedImages = [];
     renderImagePreviews();
-    chatContainer.innerHTML = '<div class="welcome-message"><h3>Hello!</h3><p>I\'m your AI assistant. Ask me anything or upload images.</p></div>';
+    chatContainer.innerHTML = '<div class="welcome-message"><h3>✨ Hello!</h3><p>我是你的 AI 助手，有什么可以帮你的？</p></div>';
     renderHistoryList();
 }
 
@@ -865,20 +854,63 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 imageUploadInput.addEventListener('change', (e) => {
     const files = Array.from(e.target.files);
 
-    if (selectedImages.length + files.length > 9) {
-        alert("You can upload a maximum of 9 files.");
-        return;
-    }
+    // 分离文本文件和媒体文件（图片/PDF）
+    const TEXT_EXTENSIONS = ['.txt', '.json', '.md', '.csv', '.log', '.xml', '.yaml', '.yml'];
+    const textFiles = [];
+    const mediaFiles = [];
 
     for (const file of files) {
-        if (file.size > MAX_FILE_SIZE) {
-            alert(`File "${file.name}" exceeds the 10MB size limit (文件大小不能超过10MB).`);
-            return;
+        const ext = '.' + file.name.split('.').pop().toLowerCase();
+        const isTextType = file.type.startsWith('text/') || file.type === 'application/json';
+        if (TEXT_EXTENSIONS.includes(ext) || isTextType) {
+            textFiles.push(file);
+        } else {
+            mediaFiles.push(file);
         }
     }
 
-    selectedImages = [...selectedImages, ...files];
-    renderImagePreviews();
+    // 处理文本文件：读取内容插入到输入框
+    if (textFiles.length > 0) {
+        for (const textFile of textFiles) {
+            if (textFile.size > MAX_FILE_SIZE) {
+                alert(`File "${textFile.name}" exceeds the 10MB size limit.`);
+                continue;
+            }
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const content = ev.target.result;
+                const prefix = `📎 File: ${textFile.name}\n\`\`\`\n`;
+                const suffix = `\n\`\`\`\n`;
+                const existing = userInput.value;
+                userInput.value = existing + (existing ? '\n' : '') + prefix + content + suffix;
+                userInput.style.height = 'auto';
+                userInput.style.height = userInput.scrollHeight + 'px';
+                userInput.focus();
+                showToast(`已加载文件: ${textFile.name}`);
+            };
+            reader.readAsText(textFile);
+        }
+    }
+
+    // 处理媒体文件：原有逻辑
+    if (mediaFiles.length > 0) {
+        if (selectedImages.length + mediaFiles.length > 9) {
+            alert("You can upload a maximum of 9 files.");
+            imageUploadInput.value = '';
+            return;
+        }
+
+        for (const file of mediaFiles) {
+            if (file.size > MAX_FILE_SIZE) {
+                alert(`File "${file.name}" exceeds the 10MB size limit (文件大小不能超过10MB).`);
+                imageUploadInput.value = '';
+                return;
+            }
+        }
+
+        selectedImages = [...selectedImages, ...mediaFiles];
+        renderImagePreviews();
+    }
 
     imageUploadInput.value = '';
 });
@@ -1833,4 +1865,91 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// === Export / Import Chat ===
+const exportChatBtn = document.getElementById('export-chat-btn');
+const importChatBtn = document.getElementById('import-chat-btn');
+const importChatInput = document.getElementById('import-chat-input');
+
+// 导出当前对话为 JSON 文件
+if (exportChatBtn) {
+    exportChatBtn.addEventListener('click', () => {
+        if (!currentConversationId || messageHistory.length === 0) {
+            showToast('当前没有可导出的对话');
+            return;
+        }
+
+        const conv = conversations.find(c => c.id === currentConversationId);
+        const exportData = {
+            id: currentConversationId,
+            title: conv ? conv.title : 'Exported Chat',
+            timestamp: conv ? conv.timestamp : Date.now(),
+            exportedAt: new Date().toISOString(),
+            messages: messageHistory
+        };
+
+        const jsonStr = JSON.stringify(exportData, null, 2);
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        const title = (conv && conv.title && conv.title !== 'New Chat')
+            ? conv.title.replace(/[^a-zA-Z0-9\u4e00-\u9fff_-]/g, '_').substring(0, 30)
+            : 'chat';
+        a.href = url;
+        a.download = `${title}_${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        showToast('对话已导出');
+    });
+}
+
+// 导入对话 JSON 文件
+if (importChatBtn && importChatInput) {
+    importChatBtn.addEventListener('click', () => {
+        importChatInput.click();
+    });
+
+    importChatInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            try {
+                const data = JSON.parse(ev.target.result);
+
+                // 校验基本格式
+                if (!data.messages || !Array.isArray(data.messages)) {
+                    showToast('无效的对话文件格式');
+                    return;
+                }
+
+                // 创建新对话并加载导入的消息
+                const newId = Date.now().toString();
+                const importedConv = {
+                    id: newId,
+                    title: data.title || 'Imported Chat',
+                    messages: data.messages,
+                    timestamp: Date.now()
+                };
+
+                conversations.unshift(importedConv);
+                saveHistory();
+
+                // 切换到导入的对话
+                loadConversation(newId);
+                showToast(`已导入对话: ${importedConv.title}`);
+            } catch (err) {
+                console.error('Import error:', err);
+                showToast('导入失败: 文件格式错误');
+            }
+        };
+        reader.readAsText(file);
+        importChatInput.value = '';
+    });
 }

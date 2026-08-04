@@ -132,7 +132,7 @@
                     <div id="image-preview-container" class="image-preview-container hidden"></div>
 
                     <div class="input-wrapper">
-                        <input type="file" id="image-upload-input" multiple accept="image/*,.pdf,application/pdf" class="hidden">
+                        <input type="file" id="image-upload-input" multiple accept="image/*,.pdf,application/pdf,.txt,.json,.md,.csv,text/plain,application/json" class="hidden">
 
                         <button id="upload-trigger-btn" class="icon-btn" title="Upload Images or PDF Documents">
                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
@@ -178,6 +178,23 @@
                                 <option value="2K" selected>2K</option>
                                 <option value="4K">4K</option>
                             </select>
+                        </div>
+                        <div class="menu-right" style="display: flex; gap: 0.5rem; align-items: center; margin-left: auto;">
+                            <button type="button" id="import-chat-btn" class="menu-icon-btn" title="导入对话">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="17 8 12 3 7 8"></polyline>
+                                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                                </svg>
+                            </button>
+                            <button type="button" id="export-chat-btn" class="menu-icon-btn" title="导出对话">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="7 10 12 15 17 10"></polyline>
+                                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                                </svg>
+                            </button>
+                            <input type="file" id="import-chat-input" accept=".json" class="hidden">
                         </div>
                     </div>
                 </div>
