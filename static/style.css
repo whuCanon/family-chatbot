@@ -138,7 +138,8 @@ body {
 /* Sidebar */
 .sidebar {
     width: 280px;
-    background: #000000;
+    background: linear-gradient(180deg, #0a0a0f 0%, #050507 100%);
+    backdrop-filter: blur(20px);
     border-right: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
@@ -334,11 +335,14 @@ body {
     justify-content: center;
     gap: 0.5rem;
     transition: background 0.2s;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
     font-size: 0.95rem;
 }
 
 .new-chat-primary-btn:hover {
     background: var(--accent-hover);
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+    transform: translateY(-1px);
 }
 
 #history-list {
@@ -363,7 +367,8 @@ body {
 .history-item {
     padding: 0.75rem 0.875rem;
     margin-bottom: 0.25rem;
-    border-radius: 0.5rem;
+    border-radius: 0.625rem;
+    position: relative;
     cursor: pointer;
     color: var(--text-secondary);
     font-size: 0.9rem;
@@ -385,14 +390,14 @@ body {
 }
 
 .history-item:hover {
-    background: var(--card-bg);
+    background: rgba(255, 255, 255, 0.04);
     color: var(--text-primary);
 }
 
 .history-item.active {
-    background: var(--card-bg);
+    background: rgba(99, 102, 241, 0.08);
     color: var(--text-primary);
-    border-color: var(--border-color);
+    border-color: rgba(99, 102, 241, 0.2);
     font-weight: 500;
 }
 
@@ -440,7 +445,7 @@ header {
     background: rgba(9, 9, 11, 0.8);
     backdrop-filter: blur(8px);
     z-index: 10;
-    border-bottom: 1px solid transparent;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .header-left {
@@ -452,10 +457,11 @@ header {
 header h1 {
     font-size: 1.25rem;
     font-weight: 600;
-    background: linear-gradient(to right, #fafafa, #a1a1aa);
+    background: linear-gradient(135deg, #fafafa 0%, #a1a1aa 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
+    letter-spacing: -0.01em;
 }
 
 .icon-btn {
@@ -496,13 +502,27 @@ header h1 {
     text-align: center;
     margin-top: 20vh;
     color: var(--text-secondary);
-    animation: fadeIn 0.5s ease-out;
+    animation: welcomeFadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
 }
 
 .welcome-message h3 {
-    font-size: 2rem;
-    margin-bottom: 1rem;
-    color: var(--text-primary);
+    font-size: 2.25rem;
+    margin-bottom: 0.75rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, #818cf8, #a78bfa, #c084fc);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.02em;
+}
+
+.welcome-message p {
+    font-size: 1rem;
+    color: var(--text-secondary);
+    max-width: 420px;
+    margin: 0 auto;
+    line-height: 1.6;
 }
 
 /* Messages */
@@ -522,15 +542,16 @@ header h1 {
 
 /* 头像样式优化 */
 .avatar {
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.25rem;
+    font-size: 1.1rem;
+    position: relative;
     flex-shrink: 0;
-    background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%);
+    background: linear-gradient(145deg, #1e1b4b 0%, #1a1a2e 50%, #0f172a 100%);
     border: 1px solid rgba(99, 102, 241, 0.15);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -542,10 +563,10 @@ header h1 {
 }
 
 .message.user .avatar {
-    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 50%, #4338ca 100%);
+    background: linear-gradient(145deg, #818cf8 0%, #6366f1 50%, #4f46e5 100%);
     color: white;
     border: none;
-    box-shadow: 0 2px 12px rgba(99, 102, 241, 0.4);
+    box-shadow: 0 2px 10px rgba(99, 102, 241, 0.35);
 }
 
 .message.user:hover .avatar {
@@ -555,8 +576,8 @@ header h1 {
 /* 消息气泡样式优化 */
 .message-content {
     padding: 1rem 1.25rem;
-    border-radius: 1.25rem;
-    font-size: 1rem;
+    border-radius: 1.125rem;
+    font-size: 0.9375rem;
     line-height: 1.7;
     max-width: 80%;
     position: relative;
@@ -572,9 +593,8 @@ header h1 {
     color: white;
     border-top-right-radius: 0.375rem;
     box-shadow:
-        0 4px 14px rgba(99, 102, 241, 0.35),
-        0 2px 4px rgba(0, 0, 0, 0.1),
-        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+        0 2px 12px rgba(99, 102, 241, 0.25),
+        0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .message.user:hover .message-content {
@@ -590,12 +610,11 @@ header h1 {
     background: linear-gradient(135deg, rgba(39, 39, 42, 0.95) 0%, rgba(24, 24, 27, 0.98) 100%);
     color: var(--text-primary);
     border-top-left-radius: 0.375rem;
-    padding-bottom: 3rem;
+    padding-bottom: 2.75rem;
     border: 1px solid rgba(255, 255, 255, 0.06);
     box-shadow:
-        0 4px 16px rgba(0, 0, 0, 0.25),
-        0 2px 4px rgba(0, 0, 0, 0.1),
-        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        0 2px 12px rgba(0, 0, 0, 0.2),
+        0 1px 3px rgba(0, 0, 0, 0.08);
     backdrop-filter: blur(10px);
 }
 
@@ -997,8 +1016,8 @@ header h1 {
 
 /* Footer & Input Area */
 footer {
-    padding: 1.5rem 2rem;
-    background: transparent;
+    padding: 1rem 2rem 1.25rem;
+    background: linear-gradient(to top, var(--bg-color) 60%, transparent);
     display: flex;
     justify-content: center;
     position: relative;
@@ -1063,11 +1082,12 @@ footer {
 .input-wrapper {
     display: flex;
     gap: 0.75rem;
-    background: var(--card-bg);
+    background: rgba(24, 24, 27, 0.9);
     padding: 0.75rem 1rem;
-    border-radius: 1.25rem;
+    border-radius: 1rem;
     border: 1px solid var(--border-color);
     box-shadow: var(--shadow-lg);
+    backdrop-filter: blur(10px);
     transition: border-color 0.2s;
     align-items: flex-end;
     /* 让按钮底部对齐 */
@@ -1075,6 +1095,7 @@ footer {
 
 .input-wrapper:focus-within {
     border-color: var(--accent-color);
+    box-shadow: var(--shadow-lg), 0 0 0 2px rgba(99, 102, 241, 0.15);
 }
 
 textarea {
@@ -1107,13 +1128,15 @@ textarea {
 }
 
 #send-btn {
-    background: var(--accent-color);
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
     color: white;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
 }
 
 #send-btn:hover {
-    background: var(--accent-hover);
+    background: linear-gradient(135deg, #818cf8, #6366f1);
     transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.45);
 }
 
 #upload-trigger-btn:hover {
@@ -1252,6 +1275,17 @@ select#model-select:hover, select#resolution-select:hover {
     to {
         opacity: 1;
         transform: translateY(0);
+    }
+}
+
+@keyframes welcomeFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(16px) scale(0.97);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
     }
 }
 

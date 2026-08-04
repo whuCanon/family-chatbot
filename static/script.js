@@ -962,17 +962,21 @@ function appendMessage(role, content, isImage = false, messageIndex = -1) {
     avatar.className = 'avatar';
 
     if (role === 'user') {
-        avatar.textContent = '👤';
+        avatar.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" style="display: block; width: 55%; height: 55%;" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+  <circle cx="12" cy="7" r="4"></circle>
+</svg>`;
     } else {
+        const gradientId = 'gemini-gradient-' + Math.random().toString(36).substr(2, 6);
         avatar.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" style="display: block; width: 60%; height: 60%;">
   <defs>
-    <linearGradient id="gemini-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="${gradientId}" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#93c5fd" />
       <stop offset="50%" stop-color="#a855f7" />
       <stop offset="100%" stop-color="#ec4899" />
     </linearGradient>
   </defs>
-  <path fill="url(#gemini-gradient)" d="M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.93a12.3 12.3 0 0 1 3.81 2.58Q12 21.51 11.04 19.32Z"/>
+  <path fill="url(#${gradientId})" d="M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.93a12.3 12.3 0 0 1 3.81 2.58Q12 21.51 11.04 19.32Z"/>
 </svg>`;
     }
     div.appendChild(avatar);
