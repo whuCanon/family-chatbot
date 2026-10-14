@@ -1178,7 +1178,7 @@ textarea {
     background: rgba(255, 255, 255, 0.06);
 }
 
-select#model-select, select#resolution-select {
+select#model-select, select#resolution-select, select#aspect-ratio-select {
     background: var(--card-bg);
     border: 1px solid var(--border-color);
     color: var(--text-primary);
@@ -1190,7 +1190,7 @@ select#model-select, select#resolution-select {
     transition: all 0.2s;
 }
 
-select#model-select:hover, select#resolution-select:hover {
+select#model-select:hover, select#resolution-select:hover, select#aspect-ratio-select:hover {
     border-color: var(--text-secondary);
 }
 
@@ -1508,7 +1508,7 @@ select#model-select:hover, select#resolution-select:hover {
         padding: 0 0.25rem;
     }
 
-    select#model-select {
+    select#model-select, select#resolution-select, select#aspect-ratio-select {
         padding: 0.4rem 0.75rem;
         font-size: 0.8rem;
         border-radius: 0.6rem;

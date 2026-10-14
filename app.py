@@ -425,7 +425,18 @@ def convert_openai_to_gemini(messages):
 
                 if 'thoughtSignature' in item:
                     if parts:
-                        parts[-1]['thoughtSignature'] = item.get('thoughtSignature')
+                        thought_sig = item.get('thoughtSignature')
+                        # 前端保存的是 .sig 文件的 URL，需要读取文件内容作为真实签名
+                        if isinstance(thought_sig, str) and thought_sig.startswith("/images/cache/"):
+                            sig_path = os.path.join(IMAGE_CACHE_DIR, os.path.basename(thought_sig))
+                            try:
+                                with open(sig_path, 'r') as f:
+                                    thought_sig = f.read().strip()
+                            except Exception as e:
+                                print(f"[Gemini] Thought signature read error: {e}")
+                                thought_sig = None
+                        if thought_sig:
+                            parts[-1]['thoughtSignature'] = thought_sig
         
         if parts:
             gemini_contents.append({"role": gemini_role, "parts": parts})
@@ -433,7 +444,11 @@ def convert_openai_to_gemini(messages):
 
 def stream_gemini_native(model_name, messages, web_search=False):
     """使用 Google Gemini 原生 API 进行流式生成，支持网络搜索 Grounding"""
+    if model_name in ["gemini-4", "gemini-4.0", "gemini-4-pro", "gemini-3.1-pro-preview"]:
+        model_name = "gemini-4-argon"
+
     target_url = GEMINI_NATIVE_URL.format(model=model_name) + f"?key={GEMINI_API_KEY}"
+    print(f"[Gemini Native] Generating content with model: {model_name}, web_search: {web_search}")
     headers = {"Content-Type": "application/json"}
     contents = convert_openai_to_gemini(messages)
     
@@ -615,20 +630,31 @@ def image_proxy():
 
     gemini_contents = convert_openai_to_gemini(messages)
     
-    gemini_model = req_data.get('model', 'gemini-3.1-flash-image')
-    if gemini_model not in ["gemini-3.1-flash-image", "gemini-3-pro-image-preview"]:
+    gemini_model = req_data.get('model', 'gemini-nano-banana-2.1')
+    if gemini_model in ["nano-banana-2.1", "gemini-nano-banana-2.1"]:
+        gemini_model = "gemini-nano-banana-2.1"
+    elif gemini_model in ["nano-banana-2", "gemini-3.1-flash-image"]:
         gemini_model = "gemini-3.1-flash-image"
+
     google_url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:generateContent?key={GEMINI_API_KEY}"
     
     image_size = req_data.get('size', '2K')
     if image_size not in ["1K", "2K", "4K"]:
         image_size = "2K"
 
+    image_config = {"imageSize": image_size}
+    aspect_ratio = req_data.get('aspect_ratio') or req_data.get('aspectRatio')
+    ALLOWED_ASPECT_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9", "5:4", "4:5", "1:4", "4:1", "1:8", "8:1"]
+    if aspect_ratio in ALLOWED_ASPECT_RATIOS:
+        image_config["aspectRatio"] = aspect_ratio
+
+    print(f"[Gemini Image] Requesting image generation with model: {gemini_model}, size: {image_size}, aspect_ratio: {image_config.get('aspectRatio', 'auto (model decided)')}")
+
     payload = {
         "contents": gemini_contents,
         "generationConfig": {
             "responseModalities": ["IMAGE"],
-            "imageConfig": { "imageSize": image_size }
+            "imageConfig": image_config
         }
     }
     headers = { "Content-Type": "application/json" }

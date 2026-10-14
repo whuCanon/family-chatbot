@@ -9,11 +9,17 @@ const sendBtn = document.getElementById('send-btn');
 const modelSelect = document.getElementById('model-select');
 const searchToggleBtn = document.getElementById('search-toggle-btn');
 const resolutionSelect = document.getElementById('resolution-select');
+const aspectRatioSelect = document.getElementById('aspect-ratio-select');
 const sidebarNewChatBtn = document.getElementById('sidebar-new-chat-btn');
 const toggleSidebarBtn = document.getElementById('toggle-sidebar-btn');
 const closeSidebarBtn = document.getElementById('close-sidebar-btn');
 const sidebar = document.getElementById('history-sidebar');
 const historyList = document.getElementById('history-list');
+
+const IMAGE_MODELS = ['gemini-3.1-flash-image', 'gemini-nano-banana-2.1'];
+function isImageModel(model) {
+    return IMAGE_MODELS.includes(model);
+}
 
 // Search Toggle State
 let isSearchEnabled = localStorage.getItem('search_enabled') === 'true';
@@ -1295,7 +1301,7 @@ async function updateMessage(messageDiv, editContainer, newText, messageIndex) {
     const model = modelSelect.value;
     updateSendButtonState(true);
 
-    if (model === 'gemini-3.1-flash-image') {
+    if (isImageModel(model)) {
         const recentMessages = messageHistory.slice(-20);
         await generateImage(recentMessages, model);
     } else {
@@ -1337,8 +1343,13 @@ async function regenerateLastMessage() {
         saveHistory();
     }
 
-    await generateText(lastUserMsgText, model);
-    // 按钮状态会在 generateText 的 finally 中恢复
+    if (isImageModel(model)) {
+        const recentMessages = messageHistory.slice(-20);
+        await generateImage(recentMessages, model);
+    } else {
+        await generateText(lastUserMsgText, model);
+    }
+    // 按钮状态会在 generateText/generateImage 的 finally 中恢复
 }
 
 async function handleSend() {
@@ -1419,7 +1430,7 @@ async function handleSend() {
     // 更新按钮为停止状态
     updateSendButtonState(true);
 
-    if (model === 'gemini-3.1-flash-image') {
+    if (isImageModel(model)) {
         const recentMessages = messageHistory.slice(-20);
 
         await generateImage(recentMessages, model);
@@ -1430,12 +1441,17 @@ async function handleSend() {
     // 按钮状态会在 generateText/generateImage 的 finally 中恢复
 }
 
-async function generateImage(messages, model = "gemini-3.1-flash-image") {
+async function generateImage(messages, model = "gemini-nano-banana-2.1") {
     // 创建 AbortController
     currentAbortController = new AbortController();
     isGenerating = true;
 
-    const { messageDiv: loadingMsgDiv, contentDiv: loadingContentDiv } = appendMessage('ai', 'Generating image with Gemini 3...');
+    const modelNameMap = {
+        'gemini-nano-banana-2.1': 'Nano Banana 2.1',
+        'gemini-3.1-flash-image': 'Nano Banana 2'
+    };
+    const displayName = modelNameMap[model] || 'Gemini';
+    const { messageDiv: loadingMsgDiv, contentDiv: loadingContentDiv } = appendMessage('ai', `Generating image with ${displayName}...`);
     const toolbar = loadingContentDiv.querySelector('.message-toolbar');
     if (toolbar) toolbar.remove();
 
@@ -1446,7 +1462,8 @@ async function generateImage(messages, model = "gemini-3.1-flash-image") {
             body: JSON.stringify({
                 model: model,
                 messages: messages, // 直接发送整个历史
-                size: resolutionSelect ? resolutionSelect.value : "2K"
+                size: resolutionSelect ? resolutionSelect.value : "2K",
+                aspect_ratio: (aspectRatioSelect && aspectRatioSelect.value) ? aspectRatioSelect.value : ""
             }),
             signal: currentAbortController.signal
         });
@@ -1634,22 +1651,17 @@ sidebarNewChatBtn.addEventListener('click', () => {
 
 // 模型切换监听：切换到/从生图模型时自动开启新对话
 let previousModel = modelSelect.value;
-const imageModel = 'gemini-3.1-flash-image';
 
 function updateControlsVisibility(model) {
+    const isImage = isImageModel(model);
     if (resolutionSelect) {
-        if (model === imageModel) {
-            resolutionSelect.style.display = 'inline-block';
-        } else {
-            resolutionSelect.style.display = 'none';
-        }
+        resolutionSelect.style.display = isImage ? 'inline-block' : 'none';
+    }
+    if (aspectRatioSelect) {
+        aspectRatioSelect.style.display = isImage ? 'inline-block' : 'none';
     }
     if (searchToggleBtn) {
-        if (model === imageModel) {
-            searchToggleBtn.style.display = 'none';
-        } else {
-            searchToggleBtn.style.display = 'inline-flex';
-        }
+        searchToggleBtn.style.display = isImage ? 'none' : 'inline-flex';
     }
 }
 
@@ -1662,8 +1674,8 @@ modelSelect.addEventListener('change', () => {
     // 控制相关控件（分辨率下拉框、搜索开关）是否显示
     updateControlsVisibility(newModel);
 
-    // 如果切换到生图模型或从生图模型切出，自动开启新对话
-    if (newModel === imageModel || previousModel === imageModel) {
+    // 仅在文本模型与生图模型互相切换时自动开启新对话（生图模型之间互相切换不重新开窗口）
+    if (isImageModel(newModel) !== isImageModel(previousModel)) {
         startNewChat();
     }
 
