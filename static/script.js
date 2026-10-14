@@ -690,6 +690,24 @@ function loadConversation(id) {
     const conv = conversations.find(c => c.id === id);
     if (!conv) return;
 
+    // 恢复该历史对话最后记录的模型项
+    if (conv.model) {
+        let targetModel = conv.model;
+        // 兼容老模型别名
+        if (targetModel === 'gemini-3.1-pro-preview') targetModel = 'gemini-4-argon';
+        if (targetModel === 'gemini-3-pro-image-preview') targetModel = 'gemini-3.1-flash-image';
+
+        const optionExists = Array.from(modelSelect.options).some(opt => opt.value === targetModel);
+        if (optionExists) {
+            modelSelect.value = targetModel;
+            previousModel = targetModel;
+            updateControlsVisibility(targetModel);
+        }
+    } else {
+        // 没有模型历史记录时保持当前模型不变，确保控件与当前模型同步
+        updateControlsVisibility(modelSelect.value);
+    }
+
     currentConversationId = id;
     messageHistory = JSON.parse(JSON.stringify(conv.messages));
     selectedImages = [];
@@ -778,6 +796,7 @@ function updateCurrentConversation(role, content, isImage = false) {
             id: currentConversationId,
             title: 'New Chat',
             messages: [],
+            model: modelSelect.value,
             timestamp: Date.now()
         };
         conversations.unshift(conv); // 加到开头
@@ -797,6 +816,7 @@ function updateCurrentConversation(role, content, isImage = false) {
 
     // 实时同步内存中的 history 到 storage 对象
     conv.messages = [...messageHistory];
+    conv.model = modelSelect.value;
     conv.timestamp = Date.now();
 
     // 重新排序：把当前对话移到最前
@@ -1293,6 +1313,7 @@ async function updateMessage(messageDiv, editContainer, newText, messageIndex) {
     let conv = conversations.find(c => c.id === currentConversationId);
     if (conv) {
         conv.messages = [...messageHistory];
+        conv.model = model;
         conv.timestamp = Date.now();
         saveHistory();
     }
@@ -1677,6 +1698,13 @@ modelSelect.addEventListener('change', () => {
     // 仅在文本模型与生图模型互相切换时自动开启新对话（生图模型之间互相切换不重新开窗口）
     if (isImageModel(newModel) !== isImageModel(previousModel)) {
         startNewChat();
+    } else {
+        // 同类型模型间切换时，同步更新当前对话记录的模型信息
+        let conv = conversations.find(c => c.id === currentConversationId);
+        if (conv) {
+            conv.model = newModel;
+            saveHistory();
+        }
     }
 
     previousModel = newModel;
@@ -1897,6 +1925,7 @@ if (exportChatBtn) {
             id: currentConversationId,
             title: conv ? conv.title : 'Exported Chat',
             timestamp: conv ? conv.timestamp : Date.now(),
+            model: (conv && conv.model) ? conv.model : modelSelect.value,
             exportedAt: new Date().toISOString(),
             messages: messageHistory
         };
@@ -1947,6 +1976,7 @@ if (importChatBtn && importChatInput) {
                     id: newId,
                     title: data.title || 'Imported Chat',
                     messages: data.messages,
+                    model: data.model || '',
                     timestamp: Date.now()
                 };
 
