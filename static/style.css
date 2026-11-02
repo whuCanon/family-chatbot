@@ -20,13 +20,30 @@
     /* 移除从 * 选择器设置 font-family，避免覆盖 KaTeX 字体 */
 }
 
+html {
+    height: 100%;
+    height: -webkit-fill-available;
+    overflow: hidden;
+}
+
 body {
     background-color: var(--bg-color);
     color: var(--text-primary);
+    height: 100%;
     height: 100vh;
+    height: 100svh;
+    height: 100dvh;
+    height: -webkit-fill-available;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    overscroll-behavior: none;
     /* 在 body 上设置默认字体，允许 KaTeX 使用自己的字体 */
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
@@ -129,6 +146,10 @@ body {
 #app-container {
     display: flex;
     height: 100%;
+    height: 100vh;
+    height: 100svh;
+    height: 100dvh;
+    height: -webkit-fill-available;
     width: 100%;
     max-width: 100%;
     position: relative;
@@ -440,12 +461,16 @@ body {
 
 header {
     padding: 1rem 1.5rem;
+    padding-top: calc(1rem + env(safe-area-inset-top, 0px));
+    padding-left: calc(1.5rem + env(safe-area-inset-left, 0px));
+    padding-right: calc(1.5rem + env(safe-area-inset-right, 0px));
     display: flex;
     align-items: center;
     background: rgba(9, 9, 11, 0.8);
     backdrop-filter: blur(8px);
     z-index: 10;
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    flex-shrink: 0;
 }
 
 .header-left {
@@ -1017,10 +1042,14 @@ header h1 {
 /* Footer & Input Area */
 footer {
     padding: 1rem 2rem 1.25rem;
+    padding-bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+    padding-left: calc(2rem + env(safe-area-inset-left, 0px));
+    padding-right: calc(2rem + env(safe-area-inset-right, 0px));
     background: linear-gradient(to top, var(--bg-color) 60%, transparent);
     display: flex;
     justify-content: center;
     position: relative;
+    flex-shrink: 0;
 }
 
 .input-area {
@@ -1319,11 +1348,16 @@ select#model-select:hover, select#resolution-select:hover, select#aspect-ratio-s
         top: 0;
         left: 0;
         height: 100%;
+        height: 100svh;
+        height: 100dvh;
+        height: -webkit-fill-available;
         width: 85%;
         max-width: 320px;
         transform: translateX(-100%);
         box-shadow: var(--shadow-lg);
         z-index: 1000;
+        padding-top: env(safe-area-inset-top, 0px);
+        padding-bottom: env(safe-area-inset-bottom, 0px);
     }
 
     .sidebar.open {
@@ -1356,6 +1390,10 @@ select#model-select:hover, select#resolution-select:hover, select#aspect-ratio-s
     /* 头部样式 */
     header {
         padding: 0.75rem 1rem;
+        padding-top: calc(0.75rem + env(safe-area-inset-top, 0px));
+        padding-left: calc(1rem + env(safe-area-inset-left, 0px));
+        padding-right: calc(1rem + env(safe-area-inset-right, 0px));
+        flex-shrink: 0;
     }
 
     header h1 {
@@ -1367,6 +1405,7 @@ select#model-select:hover, select#resolution-select:hover, select#aspect-ratio-s
         padding: 1rem 0.75rem;
         padding-bottom: 3rem;
         gap: 1rem;
+        -webkit-overflow-scrolling: touch;
     }
 
     /* 消息样式移动端优化 */
@@ -1472,8 +1511,11 @@ select#model-select:hover, select#resolution-select:hover, select#aspect-ratio-s
 
     /* 底部输入区域移动端优化 */
     footer {
-        padding: 0.75rem 0.5rem;
-        padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0));
+        padding: 0.6rem 0.5rem;
+        padding-bottom: calc(0.6rem + env(safe-area-inset-bottom, 0px));
+        padding-left: calc(0.5rem + env(safe-area-inset-left, 0px));
+        padding-right: calc(0.5rem + env(safe-area-inset-right, 0px));
+        flex-shrink: 0;
     }
 
     .input-area {
@@ -2190,3 +2232,81 @@ select#model-select:hover, select#resolution-select:hover, select#aspect-ratio-s
     font-size: 0.75rem;
     color: var(--text-secondary, #94a3b8);
 }
+
+/* ===== Theme toggle & Light theme ===== */
+#theme-toggle-btn .icon-sun { display: none; }
+#theme-toggle-btn .icon-moon { display: block; }
+[data-theme="light"] #theme-toggle-btn .icon-sun { display: block; }
+[data-theme="light"] #theme-toggle-btn .icon-moon { display: none; }
+
+[data-theme="light"] {
+    --bg-color: #ffffff;
+    --card-bg: #f4f4f5;
+    --text-primary: #18181b;
+    --text-secondary: #52525b;
+    --ai-msg-bg: #f4f4f5;
+    --border-color: #e4e4e7;
+    color-scheme: light;
+}
+
+[data-theme="light"] .overlay { background: rgba(255, 255, 255, 0.95); }
+[data-theme="light"] .login-card input { color: var(--text-primary); }
+[data-theme="light"] .sidebar { background: linear-gradient(180deg, #fafafa 0%, #f1f1f3 100%); }
+[data-theme="light"] .search-panel { background: rgba(0, 0, 0, 0.03); }
+[data-theme="light"] .clear-search-btn:hover,
+[data-theme="light"] .history-item:hover { background: rgba(0, 0, 0, 0.06); }
+[data-theme="light"] header {
+    background: rgba(255, 255, 255, 0.8);
+    border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+[data-theme="light"] header h1 {
+    background: linear-gradient(135deg, #18181b 0%, #52525b 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+[data-theme="light"] .avatar {
+    background: linear-gradient(145deg, #e0e7ff 0%, #eef2ff 100%);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+[data-theme="light"] .message.ai .message-content {
+    background: #f4f4f5;
+    border-color: rgba(0, 0, 0, 0.08);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+[data-theme="light"] .message.ai:hover .message-content {
+    border-color: rgba(0, 0, 0, 0.14);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
+}
+[data-theme="light"] .message-content img { border-color: rgba(0, 0, 0, 0.1); }
+[data-theme="light"] .message-content pre {
+    background: #f6f8fa;
+    border-color: rgba(0, 0, 0, 0.1);
+    box-shadow: none;
+}
+[data-theme="light"] .message-content pre code { color: #24292f; }
+[data-theme="light"] .message-content code { background: rgba(110, 118, 129, 0.15); color: #24292f; }
+[data-theme="light"] .message-content th,
+[data-theme="light"] .message-content td { border-color: rgba(0, 0, 0, 0.12); }
+[data-theme="light"] .message-content hr { background: rgba(0, 0, 0, 0.12); }
+
+/* Light theme: input area & menu bar */
+[data-theme="light"] .input-wrapper {
+    background: rgba(244, 244, 245, 0.95);
+    box-shadow: var(--shadow-md);
+}
+[data-theme="light"] #upload-trigger-btn:hover,
+[data-theme="light"] .menu-icon-btn:hover,
+[data-theme="light"] .search-toggle-btn:hover {
+    background: rgba(0, 0, 0, 0.06);
+}
+[data-theme="light"] .menu-icon-btn,
+[data-theme="light"] .search-toggle-btn,
+[data-theme="light"] select#model-select,
+[data-theme="light"] select#resolution-select,
+[data-theme="light"] select#aspect-ratio-select {
+    background: #ffffff;
+}
+[data-theme="light"] .search-toggle-btn.active { background: rgba(99, 102, 241, 0.1); }
+[data-theme="light"] .search-toggle-btn .toggle-track { background: #d4d4d8; }
+[data-theme="light"] .search-toggle-btn .toggle-thumb { background: #ffffff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); }

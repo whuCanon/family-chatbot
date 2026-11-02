@@ -387,7 +387,9 @@ passwordInput.addEventListener('keypress', (e) => {
 function showApp() {
     loginOverlay.classList.add('hidden');
     appContainer.classList.remove('hidden');
-    userInput.focus();
+    if (window.innerWidth > 768 && !('ontouchstart' in window)) {
+        userInput.focus();
+    }
     loadHistory();
     startNewChat();
 }
@@ -1995,3 +1997,71 @@ if (importChatBtn && importChatInput) {
         importChatInput.value = '';
     });
 }
+
+// 移动端视口与键盘适配 (兼容 iOS Chrome & Safari，解决键盘弹出顶出头部及底部遮挡问题)
+if (window.visualViewport) {
+    function adaptMobileVisualViewport() {
+        const app = document.getElementById('app-container');
+        if (!app) return;
+
+        // 仅在移动端或触控设备上生效
+        if (window.innerWidth <= 768 || 'ontouchstart' in window) {
+            const vv = window.visualViewport;
+            // 设定高度为当前可视视口高度，自动避开 Chrome/Safari 底部工具栏与软键盘
+            app.style.height = `${vv.height}px`;
+            // 防止 iOS 弹出键盘时整个页面发生向上偏移动画导致头部超出
+            app.style.top = `${vv.offsetTop}px`;
+
+            // 保持 window 滚动位置为 0，防止页面外层被推上去
+            if (window.scrollY !== 0) {
+                window.scrollTo(0, 0);
+            }
+        } else {
+            app.style.height = '';
+            app.style.top = '';
+        }
+    }
+
+    window.visualViewport.addEventListener('resize', adaptMobileVisualViewport);
+    window.visualViewport.addEventListener('scroll', adaptMobileVisualViewport);
+
+    // 初始执行一次适配
+    adaptMobileVisualViewport();
+
+    if (userInput) {
+        userInput.addEventListener('focus', () => {
+            setTimeout(() => {
+                window.scrollTo(0, 0);
+                adaptMobileVisualViewport();
+            }, 300);
+        });
+        userInput.addEventListener('blur', () => {
+            setTimeout(() => {
+                window.scrollTo(0, 0);
+                adaptMobileVisualViewport();
+            }, 100);
+        });
+    }
+}
+
+
+
+// Theme (dark / light) toggle
+(function () {
+    const btn = document.getElementById('theme-toggle-btn');
+    const hljsLink = document.getElementById('hljs-theme');
+    const base = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/';
+    function applyTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        if (hljsLink) hljsLink.href = base + (theme === 'light' ? 'github.min.css' : 'github-dark.min.css');
+        if (btn) btn.title = theme === 'light' ? '切换到深色模式' : '切换到浅色模式';
+    }
+    applyTheme(document.documentElement.getAttribute('data-theme') || 'dark');
+    if (btn) {
+        btn.addEventListener('click', () => {
+            const next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+            localStorage.setItem('theme', next);
+            applyTheme(next);
+        });
+    }
+})();
