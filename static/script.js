@@ -696,7 +696,8 @@ function loadConversation(id) {
     if (conv.model) {
         let targetModel = conv.model;
         // 兼容老模型别名
-        if (targetModel === 'gemini-3.1-pro-preview') targetModel = 'gemini-4-argon';
+        if (targetModel === 'gemini-3.1-pro-preview' || targetModel === 'gemini-4' || targetModel === 'gemini-4-pro' || targetModel === 'gemini-4-argon') targetModel = 'gemini-4-neon';
+        if (targetModel === 'gemini-4-flash') targetModel = 'gemini-4-hydrogen';
         if (targetModel === 'gemini-3-pro-image-preview') targetModel = 'gemini-3.1-flash-image';
 
         const optionExists = Array.from(modelSelect.options).some(opt => opt.value === targetModel);

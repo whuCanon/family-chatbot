@@ -444,21 +444,26 @@ def convert_openai_to_gemini(messages):
 
 def stream_gemini_native(model_name, messages, web_search=False):
     """使用 Google Gemini 原生 API 进行流式生成，支持网络搜索 Grounding"""
-    if model_name in ["gemini-4", "gemini-4.0", "gemini-4-pro", "gemini-3.1-pro-preview"]:
-        model_name = "gemini-4-argon"
+    if model_name in ["gemini-4", "gemini-4.0", "gemini-4-pro", "gemini-4-argon", "gemini-3.1-pro-preview"]:
+        model_name = "gemini-4-neon"
+    elif model_name in ["gemini-4-flash"]:
+        model_name = "gemini-4-hydrogen"
 
     target_url = GEMINI_NATIVE_URL.format(model=model_name) + f"?key={GEMINI_API_KEY}"
     print(f"[Gemini Native] Generating content with model: {model_name}, web_search: {web_search}")
     headers = {"Content-Type": "application/json"}
     contents = convert_openai_to_gemini(messages)
-    
+
+    generation_config = {
+        "maxOutputTokens": MAX_OUTPUT_TOKENS,
+    }
+    if not model_name.startswith("gemini-4"):
+        generation_config["temperature"] = TEMPERATURE
+
     payload = {
         "contents": contents,
         "system_instruction": {"parts": [{"text": DEFAULT_SYSTEM_PROMPT}]},
-        "generationConfig": {
-            "temperature": TEMPERATURE,
-            "maxOutputTokens": MAX_OUTPUT_TOKENS,
-        }
+        "generationConfig": generation_config
     }
 
     if web_search:
@@ -496,6 +501,8 @@ def stream_gemini_native(model_name, messages, web_search=False):
                         parts = cand.get('content', {}).get('parts', [])
                         text_chunk = ""
                         for part in parts:
+                            if part.get('thought'):
+                                continue
                             if 'text' in part: text_chunk += part['text']
                         if text_chunk:
                             openai_chunk = {
@@ -601,7 +608,7 @@ def chat_proxy():
     if not check_session(): return jsonify({"error": "Unauthorized"}), 401
     
     data = request.json
-    model = data.get('model', 'gemini-3.6-flash')
+    model = data.get('model') or 'gemini-4-hydrogen'
     raw_messages = data.get('messages', [])
     web_search = data.get('web_search', False) or data.get('enable_search', False) or data.get('search', False)
     
